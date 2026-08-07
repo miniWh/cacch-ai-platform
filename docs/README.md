@@ -10,7 +10,7 @@
 
 | 能力域 | 说明 | 文档状态 | 入口 |
 | :--- | :--- | :---: | :--- |
-| **平台共性** | 定位、共享基础（LLM/鉴权/配置/观测）、多能力共存原则 | ✅ 可执行 | [platform/](./platform/README.md) |
+| **平台共性** | 定位、共享底座、App 挂载、网关治理、数据面 ACL/OSS、Agent 安全、观测评测门禁 | ✅ 可执行 | [platform/](./platform/README.md) |
 | **RAG 知识问答** | 多源入库、检索增强对话、引用溯源（首期落地重点） | ✅ 可执行 | [rag-agent/](./rag-agent/README.md) |
 | **通用对话助手** | 无知识库/弱知识库的多轮对话、角色与系统指令 | 📋 规划 | [chat-assistant/](./chat-assistant/README.md) |
 | **Agent 编排** | 工具调用、多步骤任务、流程编排 | 📋 规划 | [agent-orchestration/](./agent-orchestration/README.md) |
@@ -23,7 +23,8 @@
 
 1. [平台定位与能力地图](./platform/00-平台定位与能力地图.md) — 先建立「平台 ≠ 单一问答」共识  
 2. [共享基础能力](./platform/01-共享基础能力.md) — 各业务域必须复用的底座  
-3. 按当前迭代选择能力域文档（首期建议 [rag-agent](./rag-agent/README.md)）  
+3. 平台治理补齐（与主流对齐）：[02](./platform/02-应用与能力挂载模型.md) → [03](./platform/03-LLM网关治理.md) → [04](./platform/04-数据面约定-ACL与对象存储.md) → [05](./platform/05-Agent工具安全与HITL基线.md) → [06](./platform/06-可观测评测与反馈门禁.md)  
+4. 按当前迭代选择能力域文档（首期建议 [rag-agent](./rag-agent/README.md)）  
 
 ## 仓库与命名
 
