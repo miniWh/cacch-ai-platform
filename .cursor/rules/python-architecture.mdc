@@ -1,0 +1,20 @@
+---
+description: Layered package layout and dependency direction
+globs: "app/**/*.py"
+alwaysApply: false
+---
+
+# Architecture Layers
+
+Follow the documented dependency direction (do not invert):
+
+```text
+common → dao → core → rag → service → manager → web
+```
+
+- Put domain logic in `service` / `manager`, not in `web` route handlers.
+- Keep HTTP adapters thin: validate input, call services/managers, map errors.
+- Shared LLM / Embedding / Prompt code lives under `app/core/`.
+- RAG-specific code lives under `app/rag/`; reserve `app/agent/` and `app/generation/` for other domains.
+- Prefer package-relative clarity: import from `app.*`, not ad-hoc sys.path hacks.
+- Do not add runtime dependencies that are missing from `pyproject.toml`.

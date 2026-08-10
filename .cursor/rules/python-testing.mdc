@@ -1,0 +1,24 @@
+---
+description: Pytest conventions for platform tests
+globs: "tests/**/*.py"
+alwaysApply: false
+---
+
+# Testing
+
+- Use pytest (not unittest style classes unless required).
+- Name files `test_*.py`; name tests `test_*`.
+- Prefer focused unit tests close to the behavior under change.
+- Use fixtures in `conftest.py` for shared setup; avoid global mutable state.
+- Mock external I/O (LLM, vector DB, network) at boundaries.
+- After code changes, run `ruff check`, `pyright`, and `pytest` before finishing.
+
+```python
+# ❌ BAD
+def test_stuff():
+    assert True
+
+# ✅ GOOD
+def test_app_name() -> None:
+    assert APP_NAME == "cacch-ai-platform"
+```

@@ -1,0 +1,21 @@
+---
+description: Quality gate — always run Ruff, Pyright, and pytest after Python edits
+alwaysApply: true
+---
+
+# Quality Gate
+
+When changing Python code in this repo:
+
+1. Prefer editing under `app/` and tests under `tests/`.
+2. Keep formatting/lint aligned with Ruff config in `pyproject.toml`.
+3. Before finishing a task, run from repo root (with `.venv` activated):
+
+```bash
+ruff check app tests
+ruff format --check app tests
+pyright
+pytest
+```
+
+4. Fix failures you introduced; do not weaken tool configs to silence them without discussion.

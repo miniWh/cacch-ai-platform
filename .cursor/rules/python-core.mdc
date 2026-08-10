@@ -1,0 +1,29 @@
+---
+description: Modern Python coding standards for this platform
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Core
+
+- Target Python 3.12+ syntax.
+- Annotate all public function parameters and return types.
+- Prefer `X | None` over `Optional[X]`; use built-in generics (`list[str]`, `dict[str, int]`).
+- Avoid `Any` unless unavoidable; if used, add a short comment explaining why.
+- Use f-strings for formatting; prefer `pathlib.Path` over `os.path`.
+- Use context managers for files, DB sessions, HTTP clients, and locks.
+- Do not swallow exceptions with bare `except:` or empty `except Exception:`.
+
+```python
+# ❌ BAD
+def load(path):
+    try:
+        return open(path).read()
+    except:
+        return None
+
+# ✅ GOOD
+def load(path: Path) -> str:
+    with path.open(encoding="utf-8") as f:
+        return f.read()
+```
