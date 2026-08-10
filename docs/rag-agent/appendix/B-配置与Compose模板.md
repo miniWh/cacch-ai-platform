@@ -31,8 +31,12 @@ EMBEDDING_API_KEY=sk-xxx
 EMBEDDING_MODEL=your-embedding-model
 EMBEDDING_DIM=2048
 
-# MySQL
-MYSQL_DSN=mysql+pymysql://user:pass@127.0.0.1:3306/cacch_ai?charset=utf8mb4
+# MySQL（可选备选）
+# MYSQL_DSN=mysql+pymysql://user:pass@127.0.0.1:3306/cacch_ai?charset=utf8mb4
+
+# PostgreSQL（当前基础库，对应 JDBC）
+# jdbc:postgresql://10.80.86.93:5432/cdb  user=esb  password=esb
+DATABASE_URL=postgresql+psycopg://esb:esb@10.80.86.93:5432/cdb
 
 # 向量库（二选一）
 VECTOR_BACKEND=milvus   # milvus | pgvector

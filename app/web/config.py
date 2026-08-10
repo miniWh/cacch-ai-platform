@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     app_name: str = "cacch-ai-platform"
     api_auth_token: str = "dev-token"
-    database_url: str = "sqlite+pysqlite:///./cacch_ai.db"
+    database_url: str = "postgresql+psycopg://esb:esb@10.80.86.93:5432/cdb"
     probe_timeout_seconds: float = 8.0
 
 
