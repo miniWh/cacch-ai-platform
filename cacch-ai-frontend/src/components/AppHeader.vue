@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import { UserFilled } from '@element-plus/icons-vue'
-import { currentApp } from '../mock/data'
 </script>
 
 <template>
   <header class="topbar">
     <div class="left">
-      <router-link to="/chat" class="brand" title="CACCH AI 工作台">
+      <router-link to="/" class="brand" title="CACCH AI 平台">
         <img class="logo-img" src="/logo-cac-group.png" alt="泰禾集团 CAC GROUP" />
       </router-link>
       <span class="divider" />
       <span class="product">CACCH AI</span>
-      <span class="app-name">{{ currentApp.name }}</span>
+      <span class="product-sub">智能平台</span>
     </div>
     <div class="right">
       <div class="user">
-        <el-avatar :size="28" class="avatar">
+        <el-avatar :size="32" class="avatar">
           <el-icon><UserFilled /></el-icon>
         </el-avatar>
         <span class="uname">张三</span>
@@ -26,7 +25,7 @@ import { currentApp } from '../mock/data'
 
 <style scoped>
 .topbar {
-  height: var(--cacch-header-h);
+  height: 72px;
   background: #fff;
   border-bottom: 1px solid var(--cacch-border);
   display: flex;
@@ -39,42 +38,41 @@ import { currentApp } from '../mock/data'
 .left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  height: 40px;
+  height: 64px;
 }
 
 .logo-img {
-  height: 36px;
+  height: 58px;
   width: auto;
+  max-width: 320px;
   display: block;
   object-fit: contain;
 }
 
 .divider {
   width: 1px;
-  height: 22px;
+  height: 28px;
   background: var(--cacch-border);
 }
 
 .product {
   font-weight: 700;
-  color: var(--cacch-primary-dark);
-  font-size: 15px;
+  color: var(--cacch-text);
+  font-size: 16px;
   white-space: nowrap;
 }
 
-.app-name {
+.product-sub {
   color: var(--cacch-text-secondary);
   font-size: 13px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .right {

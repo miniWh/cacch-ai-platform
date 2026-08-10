@@ -39,7 +39,7 @@ const router = createRouter({
 
 router.afterEach((to) => {
   const title = (to.meta.title as string) || 'CACCH AI'
-  document.title = `${title} · CACCH AI`
+  document.title = `${title} · CACCH AI 智能平台`
 })
 
 export default router

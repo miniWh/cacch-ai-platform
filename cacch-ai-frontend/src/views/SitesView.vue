@@ -123,7 +123,7 @@ function toggleDisable(row: SourceSite) {
   <div class="page">
     <div class="page-head">
       <h1>站点清单</h1>
-      <p>仅页面维护 · 归属当前 App 知识库</p>
+      <p>功能模块站点维护 · 仅支持页面配置</p>
     </div>
 
     <div class="toolbar">

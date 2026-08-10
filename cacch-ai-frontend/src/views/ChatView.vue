@@ -184,8 +184,8 @@ async function send() {
             </div>
           </template>
           <div v-else class="welcome">
-            <h2>农药登记评审资料问答</h2>
-            <p>可询问有效成分在各国的登记情况或评审资料。当前为前端 Mock 演示。</p>
+            <h2>开始对话</h2>
+            <p>当前模块：农药登记评审资料问答。可询问有效成分登记或评审资料（Mock 演示）。</p>
           </div>
         </div>
 

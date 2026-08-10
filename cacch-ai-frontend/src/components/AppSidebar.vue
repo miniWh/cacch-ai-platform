@@ -10,7 +10,6 @@ import {
   Menu as MenuIcon,
   Setting,
 } from '@element-plus/icons-vue'
-import { currentApp } from '../mock/data'
 import { useMenuStore, type MenuIconName } from '../stores/menu'
 
 defineProps<{ collapsed?: boolean }>()
@@ -53,7 +52,7 @@ function go(path: string) {
       <el-icon><Fold v-if="!collapsed" /><Expand v-else /></el-icon>
       <span v-if="!collapsed">收起菜单</span>
     </button>
-    <div v-if="!collapsed" class="side-foot">{{ currentApp.name }}</div>
+    <div v-if="!collapsed" class="side-foot">CACCH AI 工作台</div>
   </aside>
 </template>
 
