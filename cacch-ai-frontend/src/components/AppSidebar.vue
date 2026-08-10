@@ -7,24 +7,29 @@ import {
   Fold,
   Expand,
   List,
+  Menu as MenuIcon,
   Setting,
 } from '@element-plus/icons-vue'
 import { currentApp } from '../mock/data'
+import { useMenuStore, type MenuIconName } from '../stores/menu'
 
 defineProps<{ collapsed?: boolean }>()
 const emit = defineEmits<{ 'update:collapsed': [boolean] }>()
 
 const route = useRoute()
 const router = useRouter()
+const { visibleMenus } = useMenuStore()
+
+const iconMap: Record<MenuIconName, unknown> = {
+  chat: ChatDotRound,
+  list: List,
+  document: Document,
+  setting: Setting,
+  menu: MenuIcon,
+}
 
 const active = computed(() => route.path)
-
-const menus = [
-  { path: '/chat', label: '对话台', icon: ChatDotRound },
-  { path: '/sites', label: '站点清单', icon: List },
-  { path: '/documents', label: '文档与任务', icon: Document },
-  { path: '/settings', label: '应用配置', icon: Setting },
-]
+const menuKey = computed(() => visibleMenus.value.map((m) => `${m.id}:${m.title}:${m.sort}`).join('|'))
 
 function go(path: string) {
   router.push(path)
@@ -33,14 +38,20 @@ function go(path: string) {
 
 <template>
   <aside class="side" :class="{ collapsed }">
-    <el-menu :default-active="active" class="side-menu" :collapse="collapsed">
-      <el-menu-item v-for="m in menus" :key="m.path" :index="m.path" @click="go(m.path)">
-        <el-icon><component :is="m.icon" /></el-icon>
-        <span>{{ m.label }}</span>
+    <el-menu :key="menuKey" :default-active="active" :collapse="collapsed" class="side-menu">
+      <el-menu-item
+        v-for="m in visibleMenus"
+        :key="m.id"
+        :index="m.path"
+        @click="go(m.path)"
+      >
+        <el-icon><component :is="iconMap[m.icon]" /></el-icon>
+        <template #title>{{ m.title }}</template>
       </el-menu-item>
     </el-menu>
     <button class="collapse-btn" type="button" @click="emit('update:collapsed', !collapsed)">
       <el-icon><Fold v-if="!collapsed" /><Expand v-else /></el-icon>
+      <span v-if="!collapsed">收起菜单</span>
     </button>
     <div v-if="!collapsed" class="side-foot">{{ currentApp.name }}</div>
   </aside>
@@ -54,6 +65,7 @@ function go(path: string) {
   display: flex;
   flex-direction: column;
   transition: width 0.2s;
+  flex-shrink: 0;
 }
 
 .side.collapsed {
@@ -64,6 +76,7 @@ function go(path: string) {
   border-right: none;
   flex: 1;
   padding-top: 8px;
+  overflow: auto;
 }
 
 .collapse-btn {
@@ -74,6 +87,11 @@ function go(path: string) {
   height: 36px;
   cursor: pointer;
   color: var(--cacch-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
 }
 
 .side-foot {

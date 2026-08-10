@@ -19,6 +19,8 @@ const hint = computed(() => (route.meta.hint as string) || '功能开发中')
   padding: 48px 24px;
   text-align: center;
   color: var(--cacch-text-secondary);
+  height: 100%;
+  overflow: auto;
 }
 
 h1 {

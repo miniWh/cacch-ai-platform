@@ -2,7 +2,7 @@
 
 平台工作台前端（Vue 3 + Vite + TypeScript + Element Plus）。
 
-当前按效果图实现 **对话台**、**站点清单**（Mock 数据，未接后端）。
+统一工作台入口：顶栏 Logo（泰禾集团 / CAC GROUP）+ 动态左侧菜单；含 **对话台**、**站点清单**（Mock，未接后端）。
 
 ## 开发
 
@@ -18,10 +18,11 @@ npm run dev
 
 | 路由 | 页面 |
 | :--- | :--- |
-| `/chat` | AI 对话台（对应 `mockup-ai-chat.png`） |
-| `/sites` | 站点清单（对应 `mockup-site-management.png`） |
+| `/chat` | AI 对话台 |
+| `/sites` | 站点清单 |
 | `/documents` | 文档与任务（占位） |
 | `/settings` | 应用配置（占位） |
+| `/menus` | 菜单管理（显示/隐藏、排序、重命名） |
 
 ## 目录
 

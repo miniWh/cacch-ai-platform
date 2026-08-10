@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ChatDotRound,
@@ -11,11 +10,9 @@ import {
   Plus,
   Position,
 } from '@element-plus/icons-vue'
-import AppHeader from '../components/AppHeader.vue'
 import { currentApp, enabledSitesQuick, mockSessions } from '../mock/data'
 import type { ChatSession } from '../types'
 
-const router = useRouter()
 const sessions = ref<ChatSession[]>(structuredClone(mockSessions))
 const activeId = ref(sessions.value[0]?.id || '')
 const input = ref('')
@@ -120,21 +117,14 @@ async function send() {
   })
   await scrollBottom()
 }
-
-function goSites() {
-  router.push('/sites')
-}
 </script>
 
 <template>
   <div class="chat-shell">
-    <AppHeader variant="chat" />
     <div class="chat-body">
-      <!-- sessions -->
       <aside class="session-pane">
         <div class="session-head">
           <span>会话</span>
-          <el-button link @click="goSites">站点清单</el-button>
         </div>
         <el-button type="primary" class="new-btn" :icon="Plus" @click="createSession">新建对话</el-button>
         <div class="session-list">
@@ -271,6 +261,7 @@ function goSites() {
 <style scoped>
 .chat-shell {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--cacch-bg);
@@ -280,7 +271,7 @@ function goSites() {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 280px;
+  grid-template-columns: 240px minmax(0, 1fr) 260px;
 }
 
 .session-pane {

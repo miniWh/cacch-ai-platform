@@ -10,13 +10,11 @@ const route = useRoute()
 
 <template>
   <div class="shell">
-    <AppHeader variant="workbench" />
+    <AppHeader />
     <div class="body">
       <AppSidebar v-model:collapsed="collapsed" />
       <main class="main">
-        <slot>
-          <router-view :key="route.fullPath" />
-        </slot>
+        <router-view :key="route.fullPath" />
       </main>
     </div>
   </div>
@@ -38,7 +36,15 @@ const route = useRoute()
 .main {
   flex: 1;
   min-width: 0;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   background: var(--cacch-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.main > :deep(*) {
+  flex: 1;
+  min-height: 0;
 }
 </style>
