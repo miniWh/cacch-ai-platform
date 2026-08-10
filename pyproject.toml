@@ -7,7 +7,14 @@ name = "cacch-ai-platform"
 version = "0.1.0"
 description = "CACCH AI platform (RAG / Agent multi-domain)"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.36",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "httpx>=0.28.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -26,16 +33,18 @@ src = ["app", "tests"]
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "SIM", # flake8-simplify
-    "N",   # pep8-naming
+    "E",
+    "W",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "N",
 ]
-ignore = []
+ignore = [
+    "B008", # FastAPI Depends/Query in defaults is idiomatic
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
