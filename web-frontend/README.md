@@ -7,7 +7,7 @@
 ## 开发
 
 ```bash
-cd cacch-ai-frontend
+cd web-frontend
 npm install
 npm run dev
 ```

@@ -13,6 +13,6 @@
 | 站点清单（网站管理） | [mockups/mockup-site-management.png](./mockups/mockup-site-management.png) |
 | AI 对话台 | [mockups/mockup-ai-chat.png](./mockups/mockup-ai-chat.png) |
 
-前端工程：[`cacch-ai-frontend/`](../../../cacch-ai-frontend/)（Vue3，Mock 已实现上述两页）
+前端工程：[`../../../web-frontend/`](../../../web-frontend/)（Vue3，Mock 已实现上述两页）
 
 返回：[RAG 能力域 README](../README.md)
