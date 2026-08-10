@@ -29,7 +29,7 @@
 ## 仓库与命名
 
 - 仓库：`cacch-ai-platform`
-- 包前缀：`cacch_ai_xxx`
+- 源码根包：`app/`；发布包名：`cacch_ai_xxx`
 - 服务名：`cacch-ai-领域-service`（如 `cacch-ai-rag-service`、`cacch-ai-agent-service`）
 - 原则：**共享底座一次建设，业务能力按域扩展**，避免每个场景复制一套 LLM/鉴权/日志
 

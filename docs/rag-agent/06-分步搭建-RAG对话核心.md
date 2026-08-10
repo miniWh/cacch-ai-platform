@@ -9,6 +9,7 @@
 
 ### 本章验收
 - [ ] 检索强制 `kb_id` 过滤，跨库不串数据
+- [ ] 能从 `app_id`（或 App 入口）解析 bindings → 允许的 `kb_id` 列表
 - [ ] 流式对话：先 meta/token，后 citations，最后 done
 - [ ] 无召回、模型失败有兜底（见附录 C）
 - [ ] 至少 3 轮历史可带入且不超 Token 预算
@@ -55,13 +56,15 @@
 
 **状态**：⬜  
 
-1. 校验 session 与 `kb_id` 一致  
-2. 检索 → 组装 Prompt → 流式 LLM → 累积完整答案 → 保存消息与 citations  
-3. 无召回 / 模型失败走兜底  
+1. **解析 `app_id`（若来自 App 入口或请求携带）**：加载 App → 读 `bindings_json` → 得到允许的 `kb_ids` / `prompt_id` / retrieve 参数；无 `app_id` 的域内调试请求须显式 `kb_id`，且不得绕过后续隔离校验  
+2. 确定本次使用的 `kb_id`（须 ∈ bindings 或调试显式指定），校验 session 与 `kb_id` 一致  
+3. 检索 → 组装 Prompt → 流式 LLM → 累积完整答案 → 保存消息与 citations（建议落库可追溯 `app_id`）  
+4. 无召回 / 模型失败走兜底  
 
 **验收勾选**
+- [ ] 经 `apps/{id}/chat` 进入时，kb 来自 bindings，而非前端长期写死裸 `kb_id`
 - [ ] SSE 事件顺序符合 03 契约
-- [ ] 落库后会话详情能还原问答与引用
+- [ ] 落库后会话详情能还原问答与引用（含 app 上下文若有）
 - [ ] 示例逻辑中答案已完整累积（对照附录 C）
 
 ---

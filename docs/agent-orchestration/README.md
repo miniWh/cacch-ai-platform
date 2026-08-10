@@ -9,6 +9,8 @@
 
 在 LLM 之上增加 **规划 → 选工具 → 执行 → 观察 → 再决策** 循环，解决「不只是回答，还要办事」的需求。
 
+落地形态：以平台 **App 实例** 出现，`app_type=agent`，挂载约定见 [应用与能力挂载模型](../platform/02-应用与能力挂载模型.md)。
+
 ## 典型需求
 
 - Function Calling / 工具注册（HTTP、DB、内部 RPC）  
@@ -43,6 +45,7 @@
 
 - [平台能力地图](../platform/00-平台定位与能力地图.md)  
 - [应用挂载模型](../platform/02-应用与能力挂载模型.md)  
+- [LLM 网关治理](../platform/03-LLM网关治理.md)  
 - [工具安全与 HITL](../platform/05-Agent工具安全与HITL基线.md)  
 - [可观测与发布门禁](../platform/06-可观测评测与反馈门禁.md)  
 - [RAG 能力域](../rag-agent/README.md)  

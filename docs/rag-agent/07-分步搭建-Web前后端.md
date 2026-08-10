@@ -29,7 +29,7 @@
 4. 健康检查、会话 CRUD  
 
 **验收勾选**
-- [ ] 非流式 `/api/v1/chat` 返回 answer + citations
+- [ ] 非流式 `/api/v1/rag/chat`（域内）或终端 `POST /api/v1/apps/{id}/chat` 返回 answer + citations
 - [ ] 流式事件：meta → token* → citations → done
 - [ ] 非法 Token 返回 401/业务码
 - [ ] 超大/非法类型文件在入队前被拒绝

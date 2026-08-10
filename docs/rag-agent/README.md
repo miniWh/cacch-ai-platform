@@ -40,7 +40,7 @@ MVP 验收详见 [00-文档说明与MVP范围.md](./00-文档说明与MVP范围.
 
 - 仓库：`cacch-ai-platform`（平台仓）  
 - 本域工程/包：可落在平台内模块，或独立 `cacch-ai-rag-service`  
-- 包前缀：`cacch_ai_xxx`；API 建议前缀：`/api/v1/rag/...`（与平台其他域区分）  
+- 源码根包：`app/`；发布包名：`cacch_ai_xxx`；本域 API 前缀：`/api/v1/rag/...`（终端对话走 `/api/v1/apps/{id}/chat`）  
 - **复用**：LLM Gateway、鉴权、配置、任务队列走平台共享约定，本域只实现检索与知识编排差异  
 
 ## 文档地图

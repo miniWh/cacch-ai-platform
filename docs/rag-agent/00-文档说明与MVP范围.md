@@ -82,8 +82,8 @@
 
 - 平台仓库：`cacch-ai-platform`  
 - 本域可为平台内模块，或独立服务 `cacch-ai-rag-service`  
-- Python 包前缀：`cacch_ai_xxx`  
-- API 建议：`/api/v1/rag/...` 或与平台统一网关下的 rag 路由组  
+- 源码根包：`app/`；发布包名可用 `cacch_ai_xxx`  
+- API 前缀（已选定）：本域 `/api/v1/rag/...`；终端对话 `/api/v1/apps/{id}/chat`  
 - LLM/鉴权/任务：**复用平台共享底座**，见 [共享基础能力](../platform/01-共享基础能力.md)  
 
 ## 6. 推荐阅读 / 执行顺序
