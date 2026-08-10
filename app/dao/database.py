@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.common.db_naming import AI_TABLE_PREFIX, assert_only_ai_tables
 from app.dao.models import KnowledgeBase, SourceSite  # noqa: F401 — register metadata
 from app.dao.models.base import Base
 from app.web.config import get_settings
@@ -46,8 +47,16 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 def init_db() -> None:
+    """Create AI tables only. Never DDL other business tables in shared DB."""
+    assert_only_ai_tables(set(Base.metadata.tables.keys()))
     engine = get_engine()
-    Base.metadata.create_all(bind=engine)
+    # 显式只建白名单表，避免误带入其他 metadata
+    tables = [
+        Base.metadata.tables[name]
+        for name in sorted(Base.metadata.tables.keys())
+        if name.startswith(AI_TABLE_PREFIX)
+    ]
+    Base.metadata.create_all(bind=engine, tables=tables)
 
 
 def get_db() -> Generator[Session, None, None]:

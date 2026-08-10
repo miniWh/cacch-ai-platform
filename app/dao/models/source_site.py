@@ -1,4 +1,4 @@
-"""source_site table — seed catalog per knowledge base."""
+"""source_site table (physical: cacch_ai_source_site)."""
 
 from datetime import datetime
 from typing import Any
@@ -16,19 +16,23 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.common.db_naming import AI_TABLE_PREFIX
 from app.dao.models.base import Base
 
 
 class SourceSite(Base):
-    __tablename__ = "source_site"
+    __tablename__ = f"{AI_TABLE_PREFIX}source_site"
     __table_args__ = (
-        Index("ix_source_site_kb_status", "kb_id", "status"),
-        Index("ix_source_site_kb_region", "kb_id", "region"),
+        Index(f"ix_{AI_TABLE_PREFIX}source_site_kb_status", "kb_id", "status"),
+        Index(f"ix_{AI_TABLE_PREFIX}source_site_kb_region", "kb_id", "region"),
     )
 
     site_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     kb_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("knowledge_base.id"), nullable=False, index=True
+        BigInteger,
+        ForeignKey(f"{AI_TABLE_PREFIX}knowledge_base.id"),
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     region: Mapped[str] = mapped_column(String(8), nullable=False)
