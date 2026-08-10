@@ -1,0 +1,53 @@
+:root {
+  --cacch-primary: #0d9488;
+  --cacch-primary-dark: #0f766e;
+  --cacch-primary-soft: #ccfbf1;
+  --cacch-primary-muted: #f0fdfa;
+  --cacch-bg: #f5f7fa;
+  --cacch-panel: #ffffff;
+  --cacch-border: #e5e7eb;
+  --cacch-text: #1f2937;
+  --cacch-text-secondary: #6b7280;
+  --cacch-user-bubble: #e0f2fe;
+  --cacch-radius: 10px;
+  --cacch-header-h: 56px;
+  --cacch-sidebar-w: 220px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  font-family:
+    'Segoe UI',
+    'PingFang SC',
+    'Microsoft YaHei',
+    system-ui,
+    sans-serif;
+  color: var(--cacch-text);
+  background: var(--cacch-bg);
+}
+
+a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--cacch-primary);
+  --el-button-border-color: var(--cacch-primary);
+  --el-button-hover-bg-color: var(--cacch-primary-dark);
+  --el-button-hover-border-color: var(--cacch-primary-dark);
+  --el-button-active-bg-color: var(--cacch-primary-dark);
+  --el-button-active-border-color: var(--cacch-primary-dark);
+}
+
+.el-menu-item.is-active {
+  background: var(--cacch-primary) !important;
+  color: #fff !important;
+}
