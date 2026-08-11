@@ -1,10 +1,9 @@
 """Source site repository."""
 
-from datetime import UTC, datetime
-
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from app.common.timeutil import now_app
 from app.dao.models.source_site import SourceSite
 
 
@@ -52,7 +51,7 @@ class SourceSiteRepository:
         return entity
 
     def soft_delete(self, entity: SourceSite) -> None:
-        entity.deleted_at = datetime.now(UTC)
+        entity.deleted_at = now_app()
         self._session.flush()
 
     def _base_list_stmt(

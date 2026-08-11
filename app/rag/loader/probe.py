@@ -1,10 +1,10 @@
 """Link probe helper for source sites."""
 
-from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 import httpx
 
+from app.common.timeutil import now_app
 from app.dao.models.source_site import SourceSite
 from app.web.config import Settings
 
@@ -60,5 +60,5 @@ def apply_probe_result(
 ) -> SourceSite:
     site.status = site_status
     site.last_probe_status = probe_status
-    site.last_probe_at = datetime.now(UTC)
+    site.last_probe_at = now_app()
     return site

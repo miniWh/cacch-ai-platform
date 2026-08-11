@@ -1,11 +1,25 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
-import { categoryLabel, mockSites } from '../mock/data'
+import { Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { ApiError } from '../api/http'
+import { ensureDefaultKnowledgeBase } from '../api/kb'
+import {
+  createSource,
+  listSources,
+  probeSources,
+  updateSource,
+} from '../api/sources'
+import { categoryLabel } from '../mock/data'
 import type { SourceSite, SiteStatus } from '../types'
 
-const sites = ref<SourceSite[]>(structuredClone(mockSites))
+const kbId = ref<number | null>(null)
+const kbName = ref('')
+const sites = ref<SourceSite[]>([])
+const total = ref(0)
+const loading = ref(false)
+const saving = ref(false)
+
 const keyword = ref('')
 const region = ref('')
 const category = ref('')
@@ -13,31 +27,17 @@ const status = ref('')
 
 const drawerVisible = ref(false)
 const drawerMode = ref<'create' | 'edit'>('edit')
-const form = reactive<SourceSite>({
+const form = reactive({
   site_id: '',
   name: '',
-  region: 'US',
-  category: 'registration',
+  region: 'CN' as SourceSite['region'],
+  category: 'registration' as SourceSite['category'],
   entry_url: '',
-  crawl_mode: 'connector',
-  allowed_domains: [],
-  status: 'active',
+  crawl_mode: 'manual' as SourceSite['crawl_mode'],
+  status: 'pending_url' as SiteStatus,
   notes: '',
-  last_probe_at: null,
-  last_probe_status: null,
 })
 const domainsText = ref('')
-
-const filtered = computed(() =>
-  sites.value.filter((s) => {
-    const q = keyword.value.trim().toLowerCase()
-    if (q && !(`${s.name} ${s.entry_url}`.toLowerCase().includes(q))) return false
-    if (region.value && s.region !== region.value) return false
-    if (category.value && s.category !== category.value) return false
-    if (status.value && s.status !== status.value) return false
-    return true
-  }),
-)
 
 function statusType(st: SiteStatus) {
   if (st === 'active') return 'success'
@@ -46,20 +46,48 @@ function statusType(st: SiteStatus) {
   return 'info'
 }
 
+function errMsg(e: unknown) {
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return '请求失败'
+}
+
+async function ensureKb() {
+  const kb = await ensureDefaultKnowledgeBase()
+  kbId.value = kb.id
+  kbName.value = kb.name
+}
+
+async function loadSites() {
+  if (kbId.value == null) return
+  loading.value = true
+  try {
+    const data = await listSources(kbId.value, {
+      keyword: keyword.value.trim() || undefined,
+      region: region.value || undefined,
+      category: category.value || undefined,
+      status: status.value || undefined,
+    })
+    sites.value = data.items
+    total.value = data.total
+  } catch (e) {
+    ElMessage.error(errMsg(e))
+  } finally {
+    loading.value = false
+  }
+}
+
 function openCreate() {
   drawerMode.value = 'create'
   Object.assign(form, {
-    site_id: `site_${Date.now()}`,
+    site_id: '',
     name: '',
     region: 'CN',
     category: 'registration',
     entry_url: '',
     crawl_mode: 'manual',
-    allowed_domains: [],
     status: 'pending_url',
     notes: '',
-    last_probe_at: null,
-    last_probe_status: null,
   })
   domainsText.value = ''
   drawerVisible.value = true
@@ -67,63 +95,152 @@ function openCreate() {
 
 function openEdit(row: SourceSite) {
   drawerMode.value = 'edit'
-  Object.assign(form, structuredClone(row))
-  domainsText.value = row.allowed_domains.join('\n')
+  Object.assign(form, {
+    site_id: row.site_id,
+    name: row.name,
+    region: row.region,
+    category: row.category,
+    entry_url: row.entry_url || '',
+    crawl_mode: row.crawl_mode,
+    status: row.status,
+    notes: row.notes || '',
+  })
+  domainsText.value = (row.allowed_domains || []).join('\n')
   drawerVisible.value = true
 }
 
-function save() {
+async function save() {
+  if (kbId.value == null) return
   if (!form.name.trim()) {
     ElMessage.warning('请填写名称')
     return
   }
-  form.allowed_domains = domainsText.value
+  if (drawerMode.value === 'create' && !form.site_id.trim()) {
+    ElMessage.warning('请填写站点 ID（英文/数字/下划线）')
+    return
+  }
+
+  const domains = domainsText.value
     .split(/[\n,]/)
     .map((x) => x.trim())
     .filter(Boolean)
-  if (!form.entry_url.trim()) form.status = 'pending_url'
+  const entryUrl = form.entry_url.trim() || null
 
-  const idx = sites.value.findIndex((s) => s.site_id === form.site_id)
-  const payload = structuredClone(form)
-  if (idx >= 0) sites.value[idx] = payload
-  else sites.value.unshift(payload)
-  drawerVisible.value = false
-  ElMessage.success('已保存（测试数据，仅前端）')
+  saving.value = true
+  try {
+    if (drawerMode.value === 'create') {
+      await createSource(kbId.value, {
+        site_id: form.site_id.trim(),
+        name: form.name.trim(),
+        region: form.region,
+        category: form.category,
+        entry_url: entryUrl,
+        crawl_mode: form.crawl_mode,
+        allowed_domains: domains,
+        notes: form.notes.trim() || null,
+      })
+      ElMessage.success('已创建')
+    } else {
+      await updateSource(kbId.value, form.site_id, {
+        name: form.name.trim(),
+        region: form.region,
+        category: form.category,
+        entry_url: entryUrl,
+        crawl_mode: form.crawl_mode,
+        allowed_domains: domains,
+        status: form.status,
+        notes: form.notes.trim() || null,
+      })
+      ElMessage.success('已保存')
+    }
+    drawerVisible.value = false
+    await loadSites()
+  } catch (e) {
+    ElMessage.error(errMsg(e))
+  } finally {
+    saving.value = false
+  }
 }
 
-function probeOne(row: SourceSite) {
-  row.last_probe_at = new Date().toLocaleString('zh-CN', { hour12: false })
-  if (!row.entry_url) {
-    row.last_probe_status = 'skip'
-    row.status = 'pending_url'
-    ElMessage.warning(`${row.name} 无入口 URL，标记为 pending_url`)
+async function probeOne(row: SourceSite) {
+  if (kbId.value == null) return
+  try {
+    const data = await probeSources(kbId.value, [row.site_id])
+    const item = data.results[0]
+    ElMessage.success(
+      item
+        ? `${item.name} 探活完成：${item.last_probe_status || '—'}`
+        : '探活完成',
+    )
+    await loadSites()
+  } catch (e) {
+    ElMessage.error(errMsg(e))
+  }
+}
+
+async function probeBatch() {
+  if (kbId.value == null) return
+  if (!sites.value.length) {
+    ElMessage.warning('当前列表无站点')
     return
   }
-  row.last_probe_status = '200'
-  if (row.status === 'broken') row.status = 'active'
-  ElMessage.success(`${row.name} 探活完成（模拟）`)
-}
-
-function probeBatch() {
-  filtered.value.forEach((row) => probeOne(row))
-}
-
-function toggleDisable(row: SourceSite) {
-  if (row.status === 'disabled') {
-    row.status = row.entry_url ? 'active' : 'pending_url'
-    ElMessage.success('已启用')
-  } else {
-    row.status = 'disabled'
-    ElMessage.success('已停用')
+  try {
+    const data = await probeSources(
+      kbId.value,
+      sites.value.map((s) => s.site_id),
+    )
+    ElMessage.success(`批量探活完成：${data.results.length} 条`)
+    await loadSites()
+  } catch (e) {
+    ElMessage.error(errMsg(e))
   }
 }
+
+async function toggleDisable(row: SourceSite) {
+  if (kbId.value == null) return
+  const next: SiteStatus =
+    row.status === 'disabled'
+      ? row.entry_url
+        ? 'active'
+        : 'pending_url'
+      : 'disabled'
+  try {
+    await updateSource(kbId.value, row.site_id, { status: next })
+    ElMessage.success(next === 'disabled' ? '已停用' : '已启用')
+    await loadSites()
+  } catch (e) {
+    ElMessage.error(errMsg(e))
+  }
+}
+
+let searchTimer: number | undefined
+watch([keyword, region, category, status], () => {
+  window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    void loadSites()
+  }, 300)
+})
+
+onMounted(async () => {
+  try {
+    await ensureKb()
+    await loadSites()
+  } catch (e) {
+    ElMessage.error(`初始化失败：${errMsg(e)}`)
+  }
+})
 </script>
 
 <template>
   <div class="page">
     <div class="page-head">
       <h1>站点清单</h1>
-      <p>功能模块站点维护 · 仅支持页面配置</p>
+      <p>
+        功能模块站点维护 · 对接后端 API
+        <template v-if="kbId != null">
+          · 知识库 #{{ kbId }}（{{ kbName }}）· 共 {{ total }} 条
+        </template>
+      </p>
     </div>
 
     <div class="toolbar">
@@ -156,18 +273,20 @@ function toggleDisable(row: SourceSite) {
         <el-option label="disabled" value="disabled" />
       </el-select>
       <div class="spacer" />
+      <el-button :icon="Refresh" :loading="loading" @click="loadSites">刷新</el-button>
       <el-button type="primary" :icon="Plus" @click="openCreate">新建站点</el-button>
-      <el-button @click="probeBatch">批量探活</el-button>
+      <el-button :loading="loading" @click="probeBatch">批量探活</el-button>
     </div>
 
-    <div class="table-wrap">
-      <el-table :data="filtered" stripe height="100%" empty-text="暂无站点，点击「新建站点」添加">
+    <div class="table-wrap" v-loading="loading">
+      <el-table :data="sites" stripe height="100%" empty-text="暂无站点，点击「新建站点」添加">
         <el-table-column prop="name" label="名称" min-width="160" fixed />
+        <el-table-column prop="site_id" label="站点 ID" min-width="120" show-overflow-tooltip />
         <el-table-column prop="region" label="地区" width="80" />
         <el-table-column label="类别" width="90">
           <template #default="{ row }">{{ categoryLabel[row.category] || row.category }}</template>
         </el-table-column>
-        <el-table-column label="入口 URL" min-width="240" show-overflow-tooltip>
+        <el-table-column label="入口 URL" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <a v-if="row.entry_url" :href="row.entry_url" target="_blank" rel="noreferrer">{{
               row.entry_url
@@ -178,7 +297,9 @@ function toggleDisable(row: SourceSite) {
         <el-table-column prop="crawl_mode" label="采集模式" width="120" />
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small" effect="light">{{ row.status }}</el-tag>
+            <el-tag :type="statusType(row.status)" size="small" effect="light">{{
+              row.status
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="最近探活" width="110">
@@ -205,12 +326,24 @@ function toggleDisable(row: SourceSite) {
       destroy-on-close
     >
       <el-form label-position="top">
+        <el-form-item label="站点 ID" required>
+          <el-input
+            v-model="form.site_id"
+            :disabled="drawerMode === 'edit'"
+            placeholder="如 us_ppis（英文/数字/_/-）"
+          />
+        </el-form-item>
         <el-form-item label="名称" required>
           <el-input v-model="form.name" />
         </el-form-item>
         <el-form-item label="地区" required>
           <el-select v-model="form.region" style="width: 100%">
-            <el-option v-for="r in ['US', 'EU', 'UK', 'AU', 'JP', 'CN', 'INT']" :key="r" :label="r" :value="r" />
+            <el-option
+              v-for="r in ['US', 'EU', 'UK', 'AU', 'JP', 'CN', 'INT']"
+              :key="r"
+              :label="r"
+              :value="r"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="类别" required>
@@ -232,6 +365,14 @@ function toggleDisable(row: SourceSite) {
             <el-option label="connector" value="connector" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="drawerMode === 'edit'" label="状态">
+          <el-select v-model="form.status" style="width: 100%">
+            <el-option label="active" value="active" />
+            <el-option label="pending_url" value="pending_url" />
+            <el-option label="broken" value="broken" />
+            <el-option label="disabled" value="disabled" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="域名白名单">
           <el-input
             v-model="domainsText"
@@ -248,7 +389,7 @@ function toggleDisable(row: SourceSite) {
       </el-form>
       <template #footer>
         <el-button @click="drawerVisible = false">取消</el-button>
-        <el-button type="primary" @click="save">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
       </template>
     </el-drawer>
   </div>

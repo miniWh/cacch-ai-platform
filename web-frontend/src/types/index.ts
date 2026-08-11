@@ -5,16 +5,31 @@ export type SiteStatus = 'active' | 'broken' | 'pending_url' | 'disabled'
 
 export interface SourceSite {
   site_id: string
+  kb_id: number
   name: string
   region: RegionCode
   category: SiteCategory
-  entry_url: string
+  entry_url: string | null
   crawl_mode: CrawlMode
   allowed_domains: string[]
+  rate_limit_qps?: number | null
   status: SiteStatus
-  notes: string
+  notes: string | null
   last_probe_at: string | null
   last_probe_status: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export interface KnowledgeBase {
+  id: number
+  name: string
+  description: string | null
+  embedding_model: string
+  embedding_dim: number
+  status: number
+  created_at: string
+  updated_at: string
 }
 
 export interface Citation {

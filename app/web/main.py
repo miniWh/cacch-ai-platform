@@ -4,11 +4,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.common.dto import fail
 from app.common.exceptions import AppError
-from app.dao.database import init_db
+from app.dao.database import get_session_factory, init_db
+from app.service.kb_service import KnowledgeBaseService
 from app.web.api.rag import router as rag_router
 from app.web.config import get_settings
 
@@ -16,6 +18,11 @@ from app.web.config import get_settings
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     init_db()
+    session = get_session_factory()()
+    try:
+        KnowledgeBaseService(session).ensure_default_kb()
+    finally:
+        session.close()
     yield
 
 
@@ -25,6 +32,15 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins or ["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @application.exception_handler(AppError)

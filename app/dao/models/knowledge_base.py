@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.db_naming import AI_TABLE_PREFIX
@@ -12,7 +12,8 @@ from app.dao.models.base import Base
 class KnowledgeBase(Base):
     __tablename__ = f"{AI_TABLE_PREFIX}knowledge_base"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # Integer + autoincrement：SQLite/PostgreSQL 均可自增；PG 库脚本仍可用 BIGSERIAL
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     embedding_model: Mapped[str] = mapped_column(String(128), nullable=False)

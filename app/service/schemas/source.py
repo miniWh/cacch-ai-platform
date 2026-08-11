@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_serializer, field_validator, model_validator
 
 
 class RegionCode(StrEnum):
@@ -120,6 +120,15 @@ class SourceSiteOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_serializer(
+        "last_probe_at", "created_at", "updated_at", when_used="json"
+    )
+    def _serialize_dt(self, value: datetime | None) -> str | None:
+        from app.common.timeutil import to_app_tz
+
+        converted = to_app_tz(value)
+        return converted.isoformat() if converted is not None else None
+
 
 class SourceListOut(BaseModel):
     items: list[SourceSiteOut]
@@ -136,6 +145,13 @@ class ProbeResultItem(BaseModel):
     status: str
     last_probe_status: str | None
     last_probe_at: datetime | None
+
+    @field_serializer("last_probe_at", when_used="json")
+    def _serialize_probe_at(self, value: datetime | None) -> str | None:
+        from app.common.timeutil import to_app_tz
+
+        converted = to_app_tz(value)
+        return converted.isoformat() if converted is not None else None
 
 
 class ProbeResponse(BaseModel):

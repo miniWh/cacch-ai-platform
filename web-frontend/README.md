@@ -19,7 +19,7 @@ npm run dev
 | 路由 | 页面 |
 | :--- | :--- |
 | `/chat` | AI 对话台 |
-| `/sites` | 站点清单 |
+| `/sites` | 站点清单（已对接后端 `/api/v1/rag/kb/{kb_id}/sources`） |
 | `/documents` | 文档与任务（占位） |
 | `/settings` | 应用配置（占位） |
 | `/menus` | 菜单管理（显示/隐藏、排序、重命名） |

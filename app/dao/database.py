@@ -28,10 +28,26 @@ def get_engine() -> Engine:
             connect_args=connect_args,
         )
         if settings.database_url.startswith("sqlite"):
+
             @event.listens_for(_engine, "connect")
             def _set_sqlite_fk(dbapi_conn: object, _: object) -> None:
                 cursor = dbapi_conn.cursor()  # type: ignore[attr-defined]
                 cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+
+        elif settings.database_url.startswith("postgresql"):
+
+            @event.listens_for(_engine, "connect")
+            def _set_pg_timezone(dbapi_conn: object, _: object) -> None:
+                # SET TIME ZONE 不支持参数绑定；时区名先经 ZoneInfo 校验
+                from zoneinfo import ZoneInfo
+
+                tz = settings.app_timezone
+                ZoneInfo(tz)  # invalid → raises
+                if any(c in tz for c in ("'", ";", "--", "/*")):
+                    raise ValueError(f"unsafe timezone: {tz}")
+                cursor = dbapi_conn.cursor()  # type: ignore[attr-defined]
+                cursor.execute(f"SET TIME ZONE '{tz}'")
                 cursor.close()
 
         _SessionLocal = sessionmaker(

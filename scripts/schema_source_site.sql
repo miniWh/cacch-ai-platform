@@ -13,6 +13,7 @@ BEGIN;
 CREATE OR REPLACE FUNCTION cacch_ai_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
+    -- 绝对时间点；展示时区由会话 TimeZone（应用连接设为 Asia/Shanghai）决定
     NEW.updated_at = CURRENT_TIMESTAMP;
     RETURN NEW;
 END;
