@@ -1,26 +1,57 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import {computed, nextTick, onMounted, onUnmounted, ref} from 'vue'
+import {ElMessage, ElMessageBox} from 'element-plus'
 import {
   ChatDotRound,
   Delete,
-  Document,
   Link,
-  Paperclip,
   Plus,
   Position,
+  VideoPause,
 } from '@element-plus/icons-vue'
-import { currentApp, enabledSitesQuick, mockSessions } from '../mock/data'
-import type { ChatSession } from '../types'
+import {streamChatCompletions, type ChatCompletionMessage} from '../api/chat'
+import {ApiError, request} from '../api/http'
+import {ensureDefaultKnowledgeBase} from '../api/kb'
+import {listSources} from '../api/sources'
+import type {ChatSession, KnowledgeBase, SourceSite} from '../types'
 
-const sessions = ref<ChatSession[]>(structuredClone(mockSessions))
-const activeId = ref(sessions.value[0]?.id || '')
+const sessions = ref<ChatSession[]>([])
+const activeId = ref('')
 const input = ref('')
 const listRef = ref<HTMLElement | null>(null)
+const sending = ref(false)
+const kb = ref<KnowledgeBase | null>(null)
+const activeSites = ref<SourceSite[]>([])
+const modelLabel = ref('rag_chat')
+let abortController: AbortController | null = null
 
 const activeSession = computed(() => sessions.value.find((s) => s.id === activeId.value))
 
+const siteQuickList = computed(() =>
+    activeSites.value
+        .filter((s) => s.entry_url)
+        .slice(0, 8)
+        .map((s) => ({
+          id: s.site_id,
+          name: s.name,
+          logo: s.name.slice(0, 2).toUpperCase(),
+          url: s.entry_url as string,
+        })),
+)
+
+function nowTime() {
+  const now = new Date()
+  return `${now.getHours().toString().padStart(2, '0')}:${now
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`
+}
+
 function selectSession(id: string) {
+  if (sending.value) {
+    ElMessage.warning('请等待当前回复完成或先停止生成')
+    return
+  }
   activeId.value = id
 }
 
@@ -30,6 +61,10 @@ async function scrollBottom() {
 }
 
 function createSession() {
+  if (sending.value) {
+    ElMessage.warning('请等待当前回复完成或先停止生成')
+    return
+  }
   const id = `s_${Date.now()}`
   sessions.value.unshift({
     id,
@@ -41,7 +76,8 @@ function createSession() {
 }
 
 async function clearSessions() {
-  await ElMessageBox.confirm('确认清空全部会话记录？（仅前端测试数据）', '提示', {
+  if (sending.value) stopGeneration()
+  await ElMessageBox.confirm('确认清空全部会话记录？', '提示', {
     type: 'warning',
   })
   sessions.value = []
@@ -51,51 +87,43 @@ async function clearSessions() {
 
 function renderMarkdownLite(text: string) {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/^-\s(.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
-    .replace(/\n/g, '<br/>')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^-\s(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`)
+      .replace(/\n/g, '<br/>')
 }
 
-function mockReply(question: string) {
-  const lower = question.toLowerCase()
-  if (lower.includes('没有') || lower.includes('未知物质xyz')) {
-    return {
-      content:
-        '未在当前知识库命中相关片段。建议：1）核对有效成分中英文名；2）从右侧已启用站点进入官网检索；3）由管理员在站点清单维护后同步入库。\n\n本回答仅供辅助参考，不构成法规符合性认定。',
-      citations: [],
-    }
-  }
-  return {
-    content: `已根据测试知识库对「${question}」生成示意回答。\n\n**检索摘要**\n- 命中若干与有效成分登记/评审相关的片段\n- 请结合下方引用来源打开原文核对\n\n**说明**\n- 当前为前端 Mock 数据，尚未对接真实 RAG 接口`,
-    citations: [
-      {
-        index: 1,
-        title: '示意引用 · 农药登记评审资料片段',
-        site_name: '农药登记评审资料',
-        url: 'https://www.efsa.europa.eu/en/publications',
-        snippet: '…（测试）与提问相关的上下文片段将显示在此处…',
-      },
-    ],
-  }
+function buildHistoryMessages(
+    session: ChatSession,
+    excludeMessageId?: string,
+): ChatCompletionMessage[] {
+  // 控制上下文长度：最近 12 条（不含正在生成的空助手气泡）
+  const recent = session.messages
+      .filter((m) => m.id !== excludeMessageId && m.content.trim())
+      .slice(-12)
+  return recent.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }))
+}
+
+function stopGeneration() {
+  abortController?.abort()
+  abortController = null
+  sending.value = false
 }
 
 async function send() {
   const text = input.value.trim()
-  if (!text) return
+  if (!text || sending.value) return
   if (!activeSession.value) createSession()
   const session = sessions.value.find((s) => s.id === activeId.value)
   if (!session) return
 
-  const now = new Date()
-  const time = `${now.getHours().toString().padStart(2, '0')}:${now
-    .getMinutes()
-    .toString()
-    .padStart(2, '0')}`
-
+  const time = nowTime()
   session.messages.push({
     id: `u_${Date.now()}`,
     role: 'user',
@@ -107,16 +135,92 @@ async function send() {
   input.value = ''
   await scrollBottom()
 
-  const reply = mockReply(text)
+  const assistantId = `a_${Date.now()}`
   session.messages.push({
-    id: `a_${Date.now()}`,
+    id: assistantId,
     role: 'assistant',
-    content: reply.content,
+    content: '',
     time,
-    citations: reply.citations,
   })
   await scrollBottom()
+
+  sending.value = true
+  abortController = new AbortController()
+  const assistant = session.messages.find((m) => m.id === assistantId)
+  let gotToken = false
+
+  try {
+    await streamChatCompletions(
+        buildHistoryMessages(session, assistantId),
+        {
+          onToken: (piece) => {
+            gotToken = true
+            if (assistant) {
+              assistant.content += piece
+              void scrollBottom()
+            }
+          },
+          onDone: () => {
+            if (assistant && !assistant.content.trim()) {
+              assistant.content = '（模型未返回内容）'
+            }
+          },
+          onError: (message) => {
+            if (assistant) {
+              assistant.content = assistant.content || `调用失败：${message}`
+            }
+            ElMessage.error(message)
+          },
+        },
+        {signal: abortController.signal},
+    )
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') {
+      if (assistant && !gotToken) {
+        assistant.content = '（已停止生成）'
+      } else if (assistant && gotToken) {
+        assistant.content += '\n\n（已停止生成）'
+      }
+    } else {
+      const msg = e instanceof ApiError ? e.message : '请求失败'
+      if (assistant && !assistant.content) {
+        assistant.content = `调用失败：${msg}`
+      }
+      ElMessage.error(msg)
+    }
+  } finally {
+    sending.value = false
+    abortController = null
+    await scrollBottom()
+  }
 }
+
+async function bootstrap() {
+  try {
+    const kbInfo = await ensureDefaultKnowledgeBase()
+    kb.value = kbInfo
+    const sources = await listSources(kbInfo.id, {status: 'active'})
+    activeSites.value = sources.items
+    const profiles = await request<{
+      configured: boolean
+      items: { alias: string; kind: string; model: string }[]
+    }>('/api/v1/core/llm/profiles')
+    const rag = profiles.items.find((p) => p.alias === 'rag_chat')
+    if (rag?.model) modelLabel.value = rag.model
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '加载知识库失败'
+    ElMessage.warning(`侧栏信息加载失败：${msg}`)
+  }
+}
+
+onMounted(() => {
+  void bootstrap()
+  if (!sessions.value.length) createSession()
+})
+
+onUnmounted(() => {
+  stopGeneration()
+})
 </script>
 
 <template>
@@ -126,17 +230,21 @@ async function send() {
         <div class="session-head">
           <span>会话</span>
         </div>
-        <el-button type="primary" class="new-btn" :icon="Plus" @click="createSession">新建对话</el-button>
+        <el-button type="primary" class="new-btn" :icon="Plus" @click="createSession">
+          新建对话
+        </el-button>
         <div class="session-list">
           <button
-            v-for="s in sessions"
-            :key="s.id"
-            type="button"
-            class="session-item"
-            :class="{ active: s.id === activeId }"
-            @click="selectSession(s.id)"
+              v-for="s in sessions"
+              :key="s.id"
+              type="button"
+              class="session-item"
+              :class="{ active: s.id === activeId }"
+              @click="selectSession(s.id)"
           >
-            <el-icon><ChatDotRound /></el-icon>
+            <el-icon>
+              <ChatDotRound/>
+            </el-icon>
             <div class="meta">
               <div class="title">{{ s.title }}</div>
               <div class="time">{{ s.time_label }}</div>
@@ -145,25 +253,34 @@ async function send() {
           <div v-if="!sessions.length" class="empty">暂无会话</div>
         </div>
         <button type="button" class="clear-btn" @click="clearSessions">
-          <el-icon><Delete /></el-icon>
+          <el-icon>
+            <Delete/>
+          </el-icon>
           清空会话记录
         </button>
       </aside>
 
-      <!-- messages -->
       <section class="chat-pane">
         <div ref="listRef" class="msg-list">
           <template v-if="activeSession?.messages.length">
             <div
-              v-for="m in activeSession.messages"
-              :key="m.id"
-              class="msg-row"
-              :class="m.role"
+                v-for="m in activeSession.messages"
+                :key="m.id"
+                class="msg-row"
+                :class="m.role"
             >
               <div v-if="m.role === 'assistant'" class="bot-avatar">AI</div>
               <div class="bubble-wrap">
                 <div class="bubble" :class="m.role">
-                  <div v-if="m.role === 'assistant'" v-html="renderMarkdownLite(m.content)" />
+                  <div
+                      v-if="m.role === 'assistant'"
+                      class="assistant-body"
+                      v-html="
+                      renderMarkdownLite(
+                        m.content || (sending && m.id === activeSession.messages.at(-1)?.id ? '思考中…' : ''),
+                      )
+                    "
+                  />
                   <div v-else>{{ m.content }}</div>
                 </div>
                 <div class="msg-time">{{ m.time }}</div>
@@ -185,73 +302,90 @@ async function send() {
           </template>
           <div v-else class="welcome">
             <h2>开始对话</h2>
-            <p>当前模块：农药登记评审资料问答。可询问有效成分登记或评审资料（Mock 演示）。</p>
+            <p>
+              已对接大模型流式接口。可询问有效成分登记、评审资料等问题；检索增强（RAG
+              引用）将在入库流水线就绪后启用。
+            </p>
           </div>
         </div>
 
         <div class="composer">
           <div class="composer-box">
             <el-input
-              v-model="input"
-              type="textarea"
-              :autosize="{ minRows: 2, maxRows: 6 }"
-              placeholder="询问有效成分登记或评审资料…"
-              @keydown.enter.exact.prevent="send"
+                v-model="input"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 6 }"
+                :disabled="sending"
+                placeholder="询问有效成分登记或评审资料…"
+                @keydown.enter.exact.prevent="send"
             />
             <div class="composer-bar">
-              <div class="left-icons">
-                <el-icon><Paperclip /></el-icon>
-                <el-icon><Document /></el-icon>
+              <div class="left-hint">{{ sending ? '生成中…' : 'Enter 发送 · Shift+Enter 换行' }}</div>
+              <div class="composer-actions">
+                <el-button v-if="sending" :icon="VideoPause" @click="stopGeneration">停止</el-button>
+                <el-button
+                    type="primary"
+                    :icon="Position"
+                    :loading="sending"
+                    :disabled="!input.trim() || sending"
+                    @click="send"
+                >
+                  发送
+                </el-button>
               </div>
-              <el-button type="primary" :icon="Position" @click="send">发送</el-button>
             </div>
           </div>
           <p class="disclaimer">回答仅供辅助参考，请核对原文</p>
         </div>
       </section>
 
-      <!-- right app panel -->
       <aside class="info-pane">
         <div class="panel">
-          <div class="panel-title">当前 App</div>
+          <div class="panel-title">当前模块</div>
           <div class="kv">
-            <span>app_type</span>
-            <el-tag size="small" type="success" effect="light">{{ currentApp.app_type }}</el-tag>
+            <span>能力</span>
+            <el-tag size="small" type="success" effect="light">rag_chat</el-tag>
           </div>
           <div class="kv">
-            <span>应用名称</span>
-            <strong>{{ currentApp.name }}</strong>
+            <span>模型档</span>
+            <strong>{{ modelLabel }}</strong>
           </div>
           <div class="kv">
             <span>知识库</span>
-            <strong>{{ currentApp.kb_name }}</strong>
+            <strong>{{ kb?.name || '加载中…' }}</strong>
           </div>
           <div class="kb-card">
             <div class="kb-top">
-              <span>已绑定 {{ currentApp.kb_count }} 个知识库</span>
+              <span>知识库 ID {{ kb?.id ?? '—' }}</span>
               <span class="ok">✓</span>
             </div>
-            <div class="kb-name">{{ currentApp.kb_name }}</div>
+            <div class="kb-name">{{ kb?.name || '—' }}</div>
+            <div class="kb-sub">
+              Embedding：{{ kb?.embedding_model || '—' }} · dim {{ kb?.embedding_dim ?? '—' }}
+            </div>
           </div>
         </div>
 
         <div class="panel">
           <div class="panel-title">已启用站点（快捷访问）</div>
           <a
-            v-for="site in enabledSitesQuick"
-            :key="site.id"
-            class="site-card"
-            :href="site.url"
-            target="_blank"
-            rel="noreferrer"
+              v-for="site in siteQuickList"
+              :key="site.id"
+              class="site-card"
+              :href="site.url"
+              target="_blank"
+              rel="noreferrer"
           >
             <span class="logo">{{ site.logo }}</span>
             <div class="site-meta">
               <div class="site-name">{{ site.name }}</div>
               <div class="site-url">{{ site.url }}</div>
             </div>
-            <el-icon><Link /></el-icon>
+            <el-icon>
+              <Link/>
+            </el-icon>
           </a>
+          <div v-if="!siteQuickList.length" class="empty">暂无启用站点，请先在站点清单维护</div>
         </div>
       </aside>
     </div>
@@ -353,6 +487,7 @@ async function send() {
   color: var(--cacch-text-secondary);
   padding: 24px 8px;
   text-align: center;
+  font-size: 13px;
 }
 
 .chat-pane {
@@ -495,12 +630,17 @@ async function send() {
   justify-content: space-between;
   align-items: center;
   margin-top: 6px;
+  gap: 12px;
 }
 
-.left-icons {
-  display: flex;
-  gap: 12px;
+.left-hint {
+  font-size: 12px;
   color: var(--cacch-text-secondary);
+}
+
+.composer-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .disclaimer {
@@ -557,6 +697,13 @@ async function send() {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
+}
+
+.kb-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--cacch-text-secondary);
+  word-break: break-all;
 }
 
 .ok {
@@ -618,6 +765,7 @@ async function send() {
   .chat-body {
     grid-template-columns: 220px minmax(0, 1fr);
   }
+
   .info-pane {
     display: none;
   }
