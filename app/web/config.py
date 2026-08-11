@@ -18,15 +18,15 @@ class Settings(BaseSettings):
     probe_timeout_seconds: float = 8.0
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     default_kb_name: str = "默认知识库"
-    default_kb_embedding_model: str = "doubao-embedding"
+    default_kb_embedding_model: str = "text-embedding-v4"
     default_kb_embedding_dim: int = 2048
     # 业务时区（写入/展示统一用此时区）
     app_timezone: str = "Asia/Shanghai"
 
-    # --- Doubao / Ark LLM ---
-    llm_provider: str = "doubao"
+    # --- 阿里云百炼 / 通义（OpenAI 兼容）---
+    llm_provider: str = "qwen"
     llm_api_key: str = ""
-    llm_base_url: str = "https://ark.cn-beijing.volces.com/api/v3"
+    llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     llm_model: str = ""
     llm_temperature: float = 0.2
     llm_max_tokens: int | None = None
@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     llm_fallback_profile_id: str = ""
     llm_fallback_model: str = ""
 
-    # --- Embedding（默认同豆包密钥；维度锁定后勿随意更换）---
+    # --- Embedding（默认同 LLM 密钥；维度锁定后勿随意更换）---
     embedding_api_key: str = ""
     embedding_base_url: str = ""
     embedding_model: str = ""

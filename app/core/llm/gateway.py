@@ -6,7 +6,10 @@ import logging
 import time
 from collections.abc import Iterator
 
-from app.core.llm.adapters.doubao import DoubaoChatAdapter, DoubaoEmbeddingAdapter
+from app.core.llm.adapters.openai_compatible import (
+    OpenAICompatibleChatAdapter,
+    OpenAICompatibleEmbeddingAdapter,
+)
 from app.core.llm.errors import LlmConfigError, LlmError
 from app.core.llm.profiles import ModelProfile, get_profile
 from app.core.llm.types import CallMeta, ChatMessage, ChatResult
@@ -14,12 +17,16 @@ from app.web.config import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
+_CHAT = OpenAICompatibleChatAdapter()
+_EMBED = OpenAICompatibleEmbeddingAdapter()
+
 
 class LlmGateway:
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
-        self._chat_adapters = {"doubao": DoubaoChatAdapter()}
-        self._embed_adapters = {"doubao": DoubaoEmbeddingAdapter()}
+        # 当前接入：阿里云百炼 OpenAI 兼容协议（provider=qwen）
+        self._chat_adapters = {"qwen": _CHAT}
+        self._embed_adapters = {"qwen": _EMBED}
 
     def _resolve(self, profile_id: str, *, kind: str) -> ModelProfile:
         profile = get_profile(self._settings, profile_id)

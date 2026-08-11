@@ -1,4 +1,4 @@
-"""Doubao (Volcengine Ark) OpenAI-compatible adapter via httpx."""
+"""OpenAI-compatible LLM adapter (阿里云百炼 / 通义千问等) via httpx."""
 
 from __future__ import annotations
 
@@ -47,12 +47,12 @@ def _raise_http(resp: httpx.Response) -> None:
     except Exception:  # noqa: BLE001
         msg = resp.text
     raise LlmProviderError(
-        f"Doubao API error HTTP {resp.status_code}: {msg}",
+        f"LLM API error HTTP {resp.status_code}: {msg}",
         status_code=resp.status_code,
     )
 
 
-class DoubaoChatAdapter:
+class OpenAICompatibleChatAdapter:
     def chat(
         self,
         *,
@@ -76,7 +76,7 @@ class DoubaoChatAdapter:
                     url, headers=_auth_headers(profile.api_key), json=payload
                 )
         except httpx.HTTPError as exc:
-            raise LlmProviderError(f"Doubao chat request failed: {exc}") from exc
+            raise LlmProviderError(f"chat request failed: {exc}") from exc
 
         if resp.status_code >= 400:
             _raise_http(resp)
@@ -85,7 +85,7 @@ class DoubaoChatAdapter:
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise LlmProviderError(f"unexpected Doubao chat response: {data}") from exc
+            raise LlmProviderError(f"unexpected chat response: {data}") from exc
 
         return ChatResult(
             content=str(content or ""),
@@ -124,7 +124,6 @@ class DoubaoChatAdapter:
                 ) as resp,
             ):
                 if resp.status_code >= 400:
-                    # read body for error detail
                     _ = resp.read()
                     _raise_http(resp)
                 for line in resp.iter_lines():
@@ -155,10 +154,10 @@ class DoubaoChatAdapter:
         except LlmProviderError:
             raise
         except httpx.HTTPError as exc:
-            raise LlmProviderError(f"Doubao stream failed: {exc}") from exc
+            raise LlmProviderError(f"chat stream failed: {exc}") from exc
 
 
-class DoubaoEmbeddingAdapter:
+class OpenAICompatibleEmbeddingAdapter:
     def embed_batch(
         self,
         *,
@@ -169,14 +168,17 @@ class DoubaoEmbeddingAdapter:
         if not texts:
             return []
         url = f"{profile.base_url}/embeddings"
-        payload = {"model": profile.model, "input": texts}
+        payload: dict[str, Any] = {"model": profile.model, "input": texts}
+        # 百炼 text-embedding-v4 等支持自定义维度；不传时常见默认 1024
+        if profile.embedding_dim:
+            payload["dimensions"] = profile.embedding_dim
         try:
             with httpx.Client(timeout=profile.timeout_seconds) as client:
                 resp = client.post(
                     url, headers=_auth_headers(profile.api_key), json=payload
                 )
         except httpx.HTTPError as exc:
-            raise LlmProviderError(f"Doubao embed request failed: {exc}") from exc
+            raise LlmProviderError(f"embed request failed: {exc}") from exc
 
         if resp.status_code >= 400:
             _raise_http(resp)
@@ -184,9 +186,8 @@ class DoubaoEmbeddingAdapter:
         data = resp.json()
         items = data.get("data")
         if not isinstance(items, list):
-            raise LlmProviderError(f"unexpected Doubao embed response: {data}")
+            raise LlmProviderError(f"unexpected embed response: {data}")
 
-        # OpenAI-compatible: data may be unordered — sort by index
         ordered = sorted(
             items,
             key=lambda x: int(x.get("index", 0)) if isinstance(x, dict) else 0,

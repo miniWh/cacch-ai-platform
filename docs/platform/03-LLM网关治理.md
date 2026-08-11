@@ -20,7 +20,7 @@
 
 | 层 | 职责 | 例子 |
 | :--- | :--- | :--- |
-| **Provider Adapter** | 对接豆包/千问/OpenAI 等协议差异 | 签名、流式解析、错误码映射 |
+| **Provider Adapter** | 对接百炼千问/OpenAI 等协议差异 | 签名、流式解析、错误码映射 |
 | **LLM Gateway** | 面向平台的治理与路由 | 选模型、限流、降级、熔断、审计、配额 |
 
 业务域（RAG/Agent/生成）**只依赖 Gateway 接口**，不直接 new 厂商 SDK。
@@ -28,7 +28,7 @@
 ```text
 App / Manager
     → LLM Gateway（profile、限流、降级、审计）
-        → Provider Adapter（doubao / qwen / openai）
+        → Provider Adapter（qwen / openai / ...）
 ```
 
 ---
@@ -38,7 +38,7 @@ App / Manager
 | 字段 | 说明 |
 | :--- | :--- |
 | profile_id | 如 `default_chat`、`rag_chat`、`agent_chat`、`embed_default` |
-| provider | doubao / qwen / openai / ... |
+| provider | qwen / openai / ... |
 | model | 具体模型名 |
 | base_url | 可选 |
 | temperature / max_tokens | 默认生成参数 |

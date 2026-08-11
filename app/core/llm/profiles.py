@@ -1,13 +1,14 @@
 """Model profile definitions (MVP: built from env settings)."""
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, cast
 
 from app.core.llm.errors import LlmConfigError
 from app.web.config import Settings
 
-ProviderName = Literal["doubao"]
+ProviderName = Literal["qwen"]
 ProfileKind = Literal["chat", "embedding"]
+SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"qwen"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,12 +29,23 @@ class ModelProfile:
 def _require(value: str, name: str) -> str:
     text = value.strip()
     if not text:
-        raise LlmConfigError(f"{name} is required for Doubao profiles")
+        raise LlmConfigError(f"{name} is required for LLM profiles")
     return text
+
+
+def _provider(settings: Settings) -> ProviderName:
+    name = settings.llm_provider.strip().lower()
+    if name not in SUPPORTED_PROVIDERS:
+        raise LlmConfigError(
+            f"unsupported LLM_PROVIDER={settings.llm_provider!r}; "
+            f"supported={sorted(SUPPORTED_PROVIDERS)}"
+        )
+    return cast(ProviderName, name)
 
 
 def build_profiles(settings: Settings) -> dict[str, ModelProfile]:
     """Static MVP profiles: rag_chat / default_chat / embed_default."""
+    provider = _provider(settings)
     api_key = _require(settings.llm_api_key, "LLM_API_KEY")
     base_url = settings.llm_base_url.rstrip("/")
     chat_model = _require(settings.llm_model, "LLM_MODEL")
@@ -46,7 +58,7 @@ def build_profiles(settings: Settings) -> dict[str, ModelProfile]:
 
     chat = ModelProfile(
         profile_id="rag_chat",
-        provider="doubao",
+        provider=provider,
         kind="chat",
         model=chat_model,
         api_key=api_key,
@@ -58,7 +70,7 @@ def build_profiles(settings: Settings) -> dict[str, ModelProfile]:
     )
     embed = ModelProfile(
         profile_id="embed_default",
-        provider="doubao",
+        provider=provider,
         kind="embedding",
         model=embed_model,
         api_key=embed_key,
@@ -77,7 +89,7 @@ def build_profiles(settings: Settings) -> dict[str, ModelProfile]:
         fb_id = settings.llm_fallback_profile_id
         profiles[fb_id] = ModelProfile(
             profile_id=fb_id,
-            provider="doubao",
+            provider=provider,
             kind="chat",
             model=settings.llm_fallback_model,
             api_key=api_key,

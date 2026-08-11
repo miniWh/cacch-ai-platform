@@ -1,4 +1,4 @@
-"""Unit tests for Doubao LLM gateway (httpx mocked)."""
+"""Unit tests for Qwen/Bailian LLM gateway (httpx mocked)."""
 
 from __future__ import annotations
 
@@ -12,13 +12,16 @@ from app.core.llm.gateway import LlmGateway
 from app.core.llm.types import CallMeta, ChatMessage
 from app.web.config import Settings
 
+_ADAPTER = "app.core.llm.adapters.openai_compatible.httpx.Client"
+
 
 def _settings(**kwargs: object) -> Settings:
     base = {
+        "llm_provider": "qwen",
         "llm_api_key": "test-key",
-        "llm_base_url": "https://ark.example.com/api/v3",
-        "llm_model": "ep-chat-test",
-        "embedding_model": "ep-embed-test",
+        "llm_base_url": "https://dashscope.example.com/compatible-mode/v1",
+        "llm_model": "qwen-plus",
+        "embedding_model": "text-embedding-v4",
         "embedding_dim": 4,
     }
     base.update(kwargs)
@@ -29,12 +32,12 @@ def test_chat_success(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/chat/completions")
         body = json.loads(request.content.decode())
-        assert body["model"] == "ep-chat-test"
+        assert body["model"] == "qwen-plus"
         assert body["stream"] is False
         return httpx.Response(
             200,
             json={
-                "model": "ep-chat-test",
+                "model": "qwen-plus",
                 "choices": [{"message": {"role": "assistant", "content": "你好"}}],
                 "usage": {
                     "prompt_tokens": 3,
@@ -52,7 +55,7 @@ def test_chat_success(monkeypatch: pytest.MonkeyPatch) -> None:
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
-    monkeypatch.setattr("app.core.llm.adapters.doubao.httpx.Client", client_factory)
+    monkeypatch.setattr(_ADAPTER, client_factory)
 
     gw = LlmGateway(_settings())
     result = gw.chat(
@@ -62,7 +65,7 @@ def test_chat_success(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert result.content == "你好"
     assert result.usage.total_tokens == 5
-    assert result.provider == "doubao"
+    assert result.provider == "qwen"
 
 
 def test_chat_stream_success(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,7 +86,7 @@ def test_chat_stream_success(monkeypatch: pytest.MonkeyPatch) -> None:
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
-    monkeypatch.setattr("app.core.llm.adapters.doubao.httpx.Client", client_factory)
+    monkeypatch.setattr(_ADAPTER, client_factory)
 
     gw = LlmGateway(_settings())
     text = "".join(
@@ -97,6 +100,8 @@ def test_chat_stream_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_embed_batch_validates_dim(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        assert body.get("dimensions") == 4
         return httpx.Response(
             200,
             json={
@@ -115,7 +120,7 @@ def test_embed_batch_validates_dim(monkeypatch: pytest.MonkeyPatch) -> None:
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
-    monkeypatch.setattr("app.core.llm.adapters.doubao.httpx.Client", client_factory)
+    monkeypatch.setattr(_ADAPTER, client_factory)
 
     gw = LlmGateway(_settings())
     vectors = gw.embed_batch(["a", "b"])
@@ -138,7 +143,7 @@ def test_embed_dim_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
-    monkeypatch.setattr("app.core.llm.adapters.doubao.httpx.Client", client_factory)
+    monkeypatch.setattr(_ADAPTER, client_factory)
 
     gw = LlmGateway(_settings(embedding_dim=4))
     with pytest.raises(LlmProviderError, match="dim mismatch"):
@@ -160,8 +165,16 @@ def test_chat_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
         kwargs["transport"] = transport
         return real_client(*args, **kwargs)
 
-    monkeypatch.setattr("app.core.llm.adapters.doubao.httpx.Client", client_factory)
+    monkeypatch.setattr(_ADAPTER, client_factory)
 
     gw = LlmGateway(_settings())
     with pytest.raises(LlmProviderError, match="401"):
         gw.chat([ChatMessage(role="user", content="x")], "rag_chat")
+
+
+def test_unsupported_provider() -> None:
+    from app.core.llm.errors import LlmConfigError
+    from app.core.llm.profiles import build_profiles
+
+    with pytest.raises(LlmConfigError, match="unsupported LLM_PROVIDER"):
+        build_profiles(_settings(llm_provider="doubao"))

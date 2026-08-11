@@ -1,4 +1,4 @@
-"""LLM / Embedding smoke & probe APIs (Doubao via gateway)."""
+"""LLM / Embedding smoke & probe APIs (via gateway)."""
 
 from typing import Any
 

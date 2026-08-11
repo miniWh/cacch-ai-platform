@@ -20,15 +20,15 @@
 APP_ENV=dev
 API_AUTH_TOKEN=change-me
 
-# LLM
-LLM_PROVIDER=doubao
+# LLM（阿里云百炼 / 通义，OpenAI 兼容）
+LLM_PROVIDER=qwen
 LLM_API_KEY=sk-xxx
-LLM_MODEL=your-chat-model
-LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+LLM_MODEL=qwen-plus
+LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 
 # Embedding（维度必须与向量库集合一致）
-EMBEDDING_API_KEY=sk-xxx
-EMBEDDING_MODEL=your-embedding-model
+# EMBEDDING_API_KEY=sk-xxx
+EMBEDDING_MODEL=text-embedding-v4
 EMBEDDING_DIM=2048
 
 # MySQL（可选备选）
