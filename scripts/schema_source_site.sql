@@ -13,13 +13,14 @@ BEGIN;
 CREATE OR REPLACE FUNCTION cacch_ai_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- 绝对时间点；展示时区由会话 TimeZone（应用连接设为 Asia/Shanghai）决定
-    NEW.updated_at = CURRENT_TIMESTAMP;
+    -- TIMESTAMP 墙钟；应用连接 SET TIME ZONE Asia/Shanghai 后 LOCALTIMESTAMP 为上海时间
+    NEW.updated_at = LOCALTIMESTAMP;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION cacch_ai_set_updated_at() IS 'CACCH AI：BEFORE UPDATE 触发器，自动刷新 updated_at';
+COMMENT ON FUNCTION cacch_ai_set_updated_at() IS
+    'CACCH AI：BEFORE UPDATE，刷新 updated_at（Asia/Shanghai 墙钟）';
 
 -- ---------------------------------------------------------------------------
 -- 知识库  cacch_ai_knowledge_base
@@ -31,8 +32,8 @@ CREATE TABLE IF NOT EXISTS cacch_ai_knowledge_base (
     embedding_model VARCHAR(128)  NOT NULL,
     embedding_dim   INTEGER       NOT NULL DEFAULT 2048,
     status          SMALLINT      NOT NULL DEFAULT 1,
-    created_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP,
+    updated_at      TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP
 );
 
 COMMENT ON TABLE  cacch_ai_knowledge_base IS '【CACCH AI】知识库：RAG 检索与文档/站点资源的归属单元';
@@ -42,8 +43,8 @@ COMMENT ON COLUMN cacch_ai_knowledge_base.description IS '知识库描述';
 COMMENT ON COLUMN cacch_ai_knowledge_base.embedding_model IS '绑定的 Embedding 模型名（维度变更需重建向量）';
 COMMENT ON COLUMN cacch_ai_knowledge_base.embedding_dim IS '向量维度，须与 Embedding 模型输出一致';
 COMMENT ON COLUMN cacch_ai_knowledge_base.status IS '状态：1=启用，0=停用';
-COMMENT ON COLUMN cacch_ai_knowledge_base.created_at IS '创建时间';
-COMMENT ON COLUMN cacch_ai_knowledge_base.updated_at IS '最后更新时间';
+COMMENT ON COLUMN cacch_ai_knowledge_base.created_at IS '创建时间（Asia/Shanghai 墙钟，无时区）';
+COMMENT ON COLUMN cacch_ai_knowledge_base.updated_at IS '最后更新时间（Asia/Shanghai 墙钟，无时区）';
 
 DROP TRIGGER IF EXISTS trg_cacch_ai_knowledge_base_updated_at ON cacch_ai_knowledge_base;
 CREATE TRIGGER trg_cacch_ai_knowledge_base_updated_at
@@ -66,11 +67,11 @@ CREATE TABLE IF NOT EXISTS cacch_ai_source_site (
     rate_limit_qps     DOUBLE PRECISION NULL,
     status             VARCHAR(32)   NOT NULL DEFAULT 'pending_url',
     notes              TEXT          NULL,
-    last_probe_at      TIMESTAMPTZ   NULL,
+    last_probe_at      TIMESTAMP     NULL,
     last_probe_status  VARCHAR(64)   NULL,
-    created_at         TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at         TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at         TIMESTAMPTZ   NULL,
+    created_at         TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP,
+    updated_at         TIMESTAMP     NOT NULL DEFAULT LOCALTIMESTAMP,
+    deleted_at         TIMESTAMP     NULL,
     CONSTRAINT fk_cacch_ai_source_site_kb
         FOREIGN KEY (kb_id) REFERENCES cacch_ai_knowledge_base (id)
 );
@@ -87,11 +88,11 @@ COMMENT ON COLUMN cacch_ai_source_site.allowed_domains IS '出站域名白名单
 COMMENT ON COLUMN cacch_ai_source_site.rate_limit_qps IS '站点限速（QPS 或间隔策略数值），可空';
 COMMENT ON COLUMN cacch_ai_source_site.status IS '状态：active / broken / pending_url / disabled';
 COMMENT ON COLUMN cacch_ai_source_site.notes IS '备注（笔误、需日文名、合规说明等）';
-COMMENT ON COLUMN cacch_ai_source_site.last_probe_at IS '最近一次链接探活时间';
+COMMENT ON COLUMN cacch_ai_source_site.last_probe_at IS '最近一次链接探活时间（Asia/Shanghai 墙钟）';
 COMMENT ON COLUMN cacch_ai_source_site.last_probe_status IS '最近探活结果（HTTP 状态码或错误摘要）';
-COMMENT ON COLUMN cacch_ai_source_site.created_at IS '创建时间';
-COMMENT ON COLUMN cacch_ai_source_site.updated_at IS '最后更新时间';
-COMMENT ON COLUMN cacch_ai_source_site.deleted_at IS '软删除时间；非空表示已删除，列表须过滤';
+COMMENT ON COLUMN cacch_ai_source_site.created_at IS '创建时间（Asia/Shanghai 墙钟，无时区）';
+COMMENT ON COLUMN cacch_ai_source_site.updated_at IS '最后更新时间（Asia/Shanghai 墙钟，无时区）';
+COMMENT ON COLUMN cacch_ai_source_site.deleted_at IS '软删除时间（Asia/Shanghai 墙钟）；非空表示已删除，列表须过滤';
 
 CREATE INDEX IF NOT EXISTS ix_cacch_ai_source_site_kb_id
     ON cacch_ai_source_site (kb_id);

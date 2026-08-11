@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.db_naming import AI_TABLE_PREFIX
+from app.common.timeutil import now_app
 from app.dao.models.base import Base
 
 
@@ -47,19 +48,24 @@ class SourceSite(Base):
         String(32), nullable=False, default="pending_url"
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 以下时间为 TIMESTAMP（无时区），存 Asia/Shanghai 墙钟
     last_probe_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=False), nullable=True
     )
     last_probe_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=False),
+        nullable=False,
+        default=now_app,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
+        DateTime(timezone=False),
         nullable=False,
+        default=now_app,
+        onupdate=now_app,
+        server_default=func.now(),
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=False), nullable=True
     )

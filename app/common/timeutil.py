@@ -1,4 +1,8 @@
-"""Application timezone helpers — default Asia/Shanghai."""
+"""Application timezone helpers — default Asia/Shanghai.
+
+DB columns use TIMESTAMP WITHOUT TIME ZONE and store Asia/Shanghai wall clock,
+so IDE clients show the same digits regardless of session TimeZone.
+"""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -11,8 +15,8 @@ def app_zone() -> ZoneInfo:
 
 
 def now_app() -> datetime:
-    """Current time in configured app timezone (aware)."""
-    return datetime.now(app_zone())
+    """Current Asia/Shanghai wall clock (naive), for DB TIMESTAMP columns."""
+    return datetime.now(app_zone()).replace(tzinfo=None)
 
 
 def to_app_tz(value: datetime | None) -> datetime | None:
@@ -20,6 +24,6 @@ def to_app_tz(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        # Treat naive as already in app TZ
+        # DB stores naive Shanghai wall clock
         return value.replace(tzinfo=app_zone())
     return value.astimezone(app_zone())
