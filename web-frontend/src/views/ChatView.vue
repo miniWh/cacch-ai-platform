@@ -53,11 +53,27 @@ function selectSession(id: string) {
     return
   }
   activeId.value = id
+  void nextTick(() => scrollBottom())
 }
 
-async function scrollBottom() {
-  await nextTick()
-  if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight
+const bottomAnchorRef = ref<HTMLElement | null>(null)
+let scrollRaf = 0
+
+/** 将消息区滚到最新内容底部（布局完成后再滚） */
+function scrollBottom(force = true) {
+  if (scrollRaf) cancelAnimationFrame(scrollRaf)
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = requestAnimationFrame(() => {
+      const list = listRef.value
+      const anchor = bottomAnchorRef.value
+      if (anchor) {
+        anchor.scrollIntoView({block: 'end', behavior: force ? 'auto' : 'smooth'})
+      } else if (list) {
+        list.scrollTop = list.scrollHeight
+      }
+      scrollRaf = 0
+    })
+  })
 }
 
 function createSession() {
@@ -133,7 +149,8 @@ async function send() {
   if (session.title === '新对话') session.title = text.slice(0, 18)
   session.time_label = time
   input.value = ''
-  await scrollBottom()
+  await nextTick()
+  scrollBottom()
 
   const assistantId = `a_${Date.now()}`
   session.messages.push({
@@ -142,12 +159,24 @@ async function send() {
     content: '',
     time,
   })
-  await scrollBottom()
+  await nextTick()
+  scrollBottom()
 
   sending.value = true
   abortController = new AbortController()
-  const assistant = session.messages.find((m) => m.id === assistantId)
+  const assistantMsgIndex = session.messages.findIndex((m) => m.id === assistantId)
   let gotToken = false
+
+  const patchAssistant = (updater: (prev: string) => string) => {
+    if (assistantMsgIndex < 0) return
+    const prev = session.messages[assistantMsgIndex]
+    // 替换对象，确保流式更新触发视图与高度重算
+    session.messages[assistantMsgIndex] = {
+      ...prev,
+      content: updater(prev.content),
+    }
+    scrollBottom()
+  }
 
   try {
     await streamChatCompletions(
@@ -155,20 +184,17 @@ async function send() {
         {
           onToken: (piece) => {
             gotToken = true
-            if (assistant) {
-              assistant.content += piece
-              void scrollBottom()
-            }
+            patchAssistant((prev) => prev + piece)
           },
           onDone: () => {
-            if (assistant && !assistant.content.trim()) {
-              assistant.content = '（模型未返回内容）'
+            const cur = session.messages[assistantMsgIndex]
+            if (cur && !cur.content.trim()) {
+              patchAssistant(() => '（模型未返回内容）')
             }
+            scrollBottom()
           },
           onError: (message) => {
-            if (assistant) {
-              assistant.content = assistant.content || `调用失败：${message}`
-            }
+            patchAssistant((prev) => prev || `调用失败：${message}`)
             ElMessage.error(message)
           },
         },
@@ -176,22 +202,21 @@ async function send() {
     )
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
-      if (assistant && !gotToken) {
-        assistant.content = '（已停止生成）'
-      } else if (assistant && gotToken) {
-        assistant.content += '\n\n（已停止生成）'
+      if (!gotToken) {
+        patchAssistant(() => '（已停止生成）')
+      } else {
+        patchAssistant((prev) => `${prev}\n\n（已停止生成）`)
       }
     } else {
       const msg = e instanceof ApiError ? e.message : '请求失败'
-      if (assistant && !assistant.content) {
-        assistant.content = `调用失败：${msg}`
-      }
+      patchAssistant((prev) => prev || `调用失败：${msg}`)
       ElMessage.error(msg)
     }
   } finally {
     sending.value = false
     abortController = null
-    await scrollBottom()
+    await nextTick()
+    scrollBottom()
   }
 }
 
@@ -220,6 +245,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopGeneration()
+  if (scrollRaf) cancelAnimationFrame(scrollRaf)
 })
 </script>
 
@@ -307,6 +333,7 @@ onUnmounted(() => {
               引用）将在入库流水线就绪后启用。
             </p>
           </div>
+          <div ref="bottomAnchorRef" class="msg-list-end" aria-hidden="true"/>
         </div>
 
         <div class="composer">
@@ -406,6 +433,11 @@ onUnmounted(() => {
   min-height: 0;
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr) 260px;
+  align-items: stretch;
+}
+
+.chat-body > * {
+  min-height: 0;
 }
 
 .session-pane {
@@ -494,12 +526,24 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .msg-list {
-  flex: 1;
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 24px 28px;
+  scroll-behavior: auto;
+}
+
+.msg-list-end {
+  width: 100%;
+  height: 1px;
+  flex-shrink: 0;
 }
 
 .msg-row {
@@ -608,6 +652,7 @@ onUnmounted(() => {
 }
 
 .composer {
+  flex-shrink: 0;
   padding: 0 28px 16px;
 }
 
