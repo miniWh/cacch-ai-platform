@@ -11,6 +11,7 @@ from app.common.dto import fail
 from app.common.exceptions import AppError
 from app.dao.database import get_session_factory, init_db
 from app.service.kb_service import KnowledgeBaseService
+from app.web.api.core import router as core_router
 from app.web.api.rag import router as rag_router
 from app.web.config import get_settings
 
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
         return {"code": 0, "message": "ok", "data": {"status": "ok"}}
 
     application.include_router(rag_router)
+    application.include_router(core_router)
     return application
 
 
