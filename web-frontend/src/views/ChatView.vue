@@ -5,6 +5,7 @@ import {
   ChatDotRound,
   Delete,
   Link,
+  MoreFilled,
   Plus,
   Position,
   VideoPause,
@@ -12,8 +13,24 @@ import {
 import {streamChatCompletions, type ChatCompletionMessage} from '../api/chat'
 import {ApiError, request} from '../api/http'
 import {ensureDefaultKnowledgeBase} from '../api/kb'
+import {
+  appendMessage,
+  clearSessions as clearSessionsApi,
+  createSession as createSessionApi,
+  deleteSession as deleteSessionApi,
+  getSession,
+  listSessions,
+  updateSession,
+} from '../api/sessions'
 import {listSources} from '../api/sources'
-import type {ChatSession, KnowledgeBase, SourceSite} from '../types'
+import type {
+  ChatMessage,
+  ChatSession,
+  ChatSessionApi,
+  ChatSessionDetailApi,
+  KnowledgeBase,
+  SourceSite,
+} from '../types'
 
 const sessions = ref<ChatSession[]>([])
 const activeId = ref('')
@@ -47,13 +64,96 @@ function nowTime() {
       .padStart(2, '0')}`
 }
 
-function selectSession(id: string) {
+function formatTimeLabel(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return nowTime()
+  const today = new Date()
+  const sameDay =
+      d.getFullYear() === today.getFullYear() &&
+      d.getMonth() === today.getMonth() &&
+      d.getDate() === today.getDate()
+  const hm = `${d.getHours().toString().padStart(2, '0')}:${d
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`
+  if (sameDay) return hm
+  return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
+}
+
+function formatMsgTime(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return nowTime()
+  return `${d.getHours().toString().padStart(2, '0')}:${d
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`
+}
+
+function mapApiSession(item: ChatSessionApi, messages: ChatMessage[] = []): ChatSession {
+  return {
+    id: item.session_id,
+    title: item.title,
+    title_locked: item.title_locked,
+    pinned: item.pinned,
+    updated_at: item.updated_at,
+    time_label: formatTimeLabel(item.updated_at),
+    messages,
+  }
+}
+
+function mapDetail(detail: ChatSessionDetailApi): ChatSession {
+  const messages: ChatMessage[] = detail.messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({
+        id: m.message_id,
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        time: formatMsgTime(m.created_at),
+        citations: m.citations ?? undefined,
+      }))
+  return mapApiSession(detail, messages)
+}
+
+function sortSessionsLocal() {
+  sessions.value.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
+    return b.updated_at.localeCompare(a.updated_at)
+  })
+}
+
+function applySessionMeta(item: ChatSessionApi) {
+  const idx = sessions.value.findIndex((s) => s.id === item.session_id)
+  if (idx < 0) return
+  const prev = sessions.value[idx]
+  sessions.value[idx] = {
+    ...prev,
+    title: item.title,
+    title_locked: item.title_locked,
+    pinned: item.pinned,
+    updated_at: item.updated_at,
+    time_label: formatTimeLabel(item.updated_at),
+  }
+  sortSessionsLocal()
+}
+
+async function selectSession(id: string) {
   if (sending.value) {
     ElMessage.warning('请等待当前回复完成或先停止生成')
     return
   }
   activeId.value = id
-  void nextTick(() => scrollBottom())
+  try {
+    const detail = await getSession(id)
+    const mapped = mapDetail(detail)
+    const idx = sessions.value.findIndex((s) => s.id === id)
+    if (idx >= 0) sessions.value[idx] = mapped
+    else sessions.value.unshift(mapped)
+    sortSessionsLocal()
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '加载会话失败'
+    ElMessage.error(msg)
+  }
+  await nextTick(() => scrollBottom())
 }
 
 const bottomAnchorRef = ref<HTMLElement | null>(null)
@@ -76,29 +176,107 @@ function scrollBottom(force = true) {
   })
 }
 
-function createSession() {
+async function createSession() {
   if (sending.value) {
     ElMessage.warning('请等待当前回复完成或先停止生成')
     return
   }
-  const id = `s_${Date.now()}`
-  sessions.value.unshift({
-    id,
-    title: '新对话',
-    time_label: '刚刚',
-    messages: [],
-  })
-  activeId.value = id
+  if (!kb.value) {
+    ElMessage.warning('知识库未就绪')
+    return
+  }
+  try {
+    const created = await createSessionApi({kb_id: kb.value.id, title: '新对话'})
+    const mapped = mapApiSession(created, [])
+    sessions.value.unshift(mapped)
+    sortSessionsLocal()
+    activeId.value = mapped.id
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '创建会话失败'
+    ElMessage.error(msg)
+  }
 }
 
 async function clearSessions() {
+  if (!kb.value) return
   if (sending.value) stopGeneration()
   await ElMessageBox.confirm('确认清空全部会话记录？', '提示', {
     type: 'warning',
   })
-  sessions.value = []
-  activeId.value = ''
-  ElMessage.success('已清空')
+  try {
+    await clearSessionsApi(kb.value.id)
+    sessions.value = []
+    activeId.value = ''
+    ElMessage.success('已清空')
+    await createSession()
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '清空失败'
+    ElMessage.error(msg)
+  }
+}
+
+async function renameSession(session: ChatSession) {
+  if (sending.value && session.id === activeId.value) {
+    ElMessage.warning('请等待当前回复完成或先停止生成')
+    return
+  }
+  try {
+    const {value} = await ElMessageBox.prompt('请输入新的会话标题', '重命名', {
+      inputValue: session.title,
+      inputPattern: /\S+/,
+      inputErrorMessage: '标题不能为空',
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+    })
+    const title = value.trim().slice(0, 50)
+    const updated = await updateSession(session.id, {title})
+    applySessionMeta(updated)
+    ElMessage.success('已重命名')
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') return
+    const msg = e instanceof ApiError ? e.message : '重命名失败'
+    ElMessage.error(msg)
+  }
+}
+
+async function togglePinSession(session: ChatSession) {
+  try {
+    const updated = await updateSession(session.id, {pinned: !session.pinned})
+    applySessionMeta(updated)
+    ElMessage.success(updated.pinned ? '已置顶' : '已取消置顶')
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '操作失败'
+    ElMessage.error(msg)
+  }
+}
+
+async function removeSession(session: ChatSession) {
+  if (sending.value && session.id === activeId.value) {
+    ElMessage.warning('请等待当前回复完成或先停止生成')
+    return
+  }
+  await ElMessageBox.confirm(`确认删除会话「${session.title}」？`, '删除会话', {
+    type: 'warning',
+  })
+  try {
+    await deleteSessionApi(session.id)
+    sessions.value = sessions.value.filter((s) => s.id !== session.id)
+    if (activeId.value === session.id) {
+      activeId.value = sessions.value[0]?.id ?? ''
+      if (activeId.value) await selectSession(activeId.value)
+      else await createSession()
+    }
+    ElMessage.success('已删除')
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '删除失败'
+    ElMessage.error(msg)
+  }
+}
+
+function onSessionMenu(command: string, session: ChatSession) {
+  if (command === 'rename') void renameSession(session)
+  else if (command === 'pin') void togglePinSession(session)
+  else if (command === 'delete') void removeSession(session)
 }
 
 function renderMarkdownLite(text: string) {
@@ -116,7 +294,6 @@ function buildHistoryMessages(
     session: ChatSession,
     excludeMessageId?: string,
 ): ChatCompletionMessage[] {
-  // 控制上下文长度：最近 12 条（不含正在生成的空助手气泡）
   const recent = session.messages
       .filter((m) => m.id !== excludeMessageId && m.content.trim())
       .slice(-12)
@@ -132,25 +309,53 @@ function stopGeneration() {
   sending.value = false
 }
 
+async function ensureActiveSession(): Promise<ChatSession | null> {
+  if (activeSession.value) return activeSession.value
+  await createSession()
+  return activeSession.value ?? null
+}
+
 async function send() {
   const text = input.value.trim()
   if (!text || sending.value) return
-  if (!activeSession.value) createSession()
-  const session = sessions.value.find((s) => s.id === activeId.value)
+  const session = await ensureActiveSession()
   if (!session) return
 
   const time = nowTime()
+  const userId = `u_${Date.now()}`
   session.messages.push({
-    id: `u_${Date.now()}`,
+    id: userId,
     role: 'user',
     content: text,
     time,
   })
-  if (session.title === '新对话') session.title = text.slice(0, 18)
+  if (!session.title_locked && session.title === '新对话') {
+    session.title = text.slice(0, 18)
+  }
   session.time_label = time
+  session.updated_at = new Date().toISOString()
+  sortSessionsLocal()
   input.value = ''
   await nextTick()
   scrollBottom()
+
+  try {
+    const saved = await appendMessage(session.id, {
+      role: 'user',
+      content: text,
+      message_id: userId,
+    })
+    // sync title / updated_at from server after auto-title
+    const refreshed = await getSession(session.id)
+    applySessionMeta(refreshed)
+    if (saved.message_id !== userId) {
+      const u = session.messages.find((m) => m.id === userId)
+      if (u) u.id = saved.message_id
+    }
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : '保存消息失败'
+    ElMessage.warning(msg)
+  }
 
   const assistantId = `a_${Date.now()}`
   session.messages.push({
@@ -170,7 +375,6 @@ async function send() {
   const patchAssistant = (updater: (prev: string) => string) => {
     if (assistantMsgIndex < 0) return
     const prev = session.messages[assistantMsgIndex]
-    // 替换对象，确保流式更新触发视图与高度重算
     session.messages[assistantMsgIndex] = {
       ...prev,
       content: updater(prev.content),
@@ -215,8 +419,33 @@ async function send() {
   } finally {
     sending.value = false
     abortController = null
+    const finalContent = session.messages[assistantMsgIndex]?.content ?? ''
+    if (finalContent.trim()) {
+      try {
+        await appendMessage(session.id, {
+          role: 'assistant',
+          content: finalContent,
+          message_id: assistantId,
+        })
+        const refreshed = await getSession(session.id)
+        applySessionMeta(refreshed)
+      } catch {
+        /* ignore persist errors after stream */
+      }
+    }
     await nextTick()
     scrollBottom()
+  }
+}
+
+async function loadSessions(kbId: number) {
+  const listed = await listSessions(kbId)
+  sessions.value = listed.items.map((item) => mapApiSession(item, []))
+  sortSessionsLocal()
+  if (sessions.value.length) {
+    await selectSession(sessions.value[0].id)
+  } else {
+    await createSession()
   }
 }
 
@@ -232,6 +461,7 @@ async function bootstrap() {
     }>('/api/v1/core/llm/profiles')
     const rag = profiles.items.find((p) => p.alias === 'rag_chat')
     if (rag?.model) modelLabel.value = rag.model
+    await loadSessions(kbInfo.id)
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : '加载知识库失败'
     ElMessage.warning(`侧栏信息加载失败：${msg}`)
@@ -240,7 +470,6 @@ async function bootstrap() {
 
 onMounted(() => {
   void bootstrap()
-  if (!sessions.value.length) createSession()
 })
 
 onUnmounted(() => {
@@ -260,22 +489,49 @@ onUnmounted(() => {
           新建对话
         </el-button>
         <div class="session-list">
-          <button
+          <div
               v-for="s in sessions"
               :key="s.id"
-              type="button"
               class="session-item"
-              :class="{ active: s.id === activeId }"
+              :class="{ active: s.id === activeId, pinned: s.pinned }"
               @click="selectSession(s.id)"
           >
-            <el-icon>
+            <el-icon class="session-icon">
               <ChatDotRound/>
             </el-icon>
             <div class="meta">
-              <div class="title">{{ s.title }}</div>
+              <div class="title-row">
+                <span v-if="s.pinned" class="pin-mark" title="已置顶">顶</span>
+                <div class="title">{{ s.title }}</div>
+              </div>
               <div class="time">{{ s.time_label }}</div>
             </div>
-          </button>
+            <el-dropdown
+                trigger="click"
+                @command="(cmd: string) => onSessionMenu(cmd, s)"
+                @click.stop
+            >
+              <button
+                  type="button"
+                  class="more-btn"
+                  title="更多"
+                  @click.stop
+              >
+                <el-icon><MoreFilled/></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                  <el-dropdown-item command="pin">
+                    {{ s.pinned ? '取消置顶' : '置顶' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>
+                    删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
           <div v-if="!sessions.length" class="empty">暂无会话</div>
         </div>
         <button type="button" class="clear-btn" @click="clearSessions">
@@ -471,15 +727,16 @@ onUnmounted(() => {
 
 .session-item {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
   border: none;
   background: transparent;
   border-radius: 10px;
-  padding: 10px;
+  padding: 10px 8px 10px 10px;
   text-align: left;
   cursor: pointer;
   color: inherit;
+  position: relative;
 }
 
 .session-item.active,
@@ -491,15 +748,72 @@ onUnmounted(() => {
   outline: 1px solid var(--cacch-primary-soft);
 }
 
+.session-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pin-mark {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--cacch-primary-soft, #d9e8f5);
+  color: var(--cacch-primary, #1a6fb5);
+  font-weight: 600;
+}
+
 .meta .title {
   font-size: 13px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta .time {
   font-size: 12px;
   color: var(--cacch-text-secondary);
   margin-top: 2px;
+}
+
+.more-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--cacch-text-secondary);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.55;
+  padding: 0;
+}
+
+.session-item:hover .more-btn,
+.session-item.active .more-btn {
+  opacity: 1;
+}
+
+.more-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--cacch-text);
 }
 
 .clear-btn {

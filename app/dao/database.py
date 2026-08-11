@@ -7,7 +7,12 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.common.db_naming import AI_TABLE_PREFIX, assert_only_ai_tables
-from app.dao.models import KnowledgeBase, SourceSite  # noqa: F401 — register metadata
+from app.dao.models import (  # noqa: F401 — register metadata
+    ChatMessage,
+    ChatSession,
+    KnowledgeBase,
+    SourceSite,
+)
 from app.dao.models.base import Base
 from app.web.config import get_settings
 

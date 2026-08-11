@@ -8,6 +8,8 @@ AI_PHYSICAL_TABLES: frozenset[str] = frozenset(
     {
         f"{AI_TABLE_PREFIX}knowledge_base",
         f"{AI_TABLE_PREFIX}source_site",
+        f"{AI_TABLE_PREFIX}chat_session",
+        f"{AI_TABLE_PREFIX}chat_message",
     }
 )
 

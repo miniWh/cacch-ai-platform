@@ -48,10 +48,40 @@ export interface ChatMessage {
   citations?: Citation[]
 }
 
+/** Backend session list/detail shape */
+export interface ChatSessionApi {
+  session_id: string
+  kb_id: number
+  app_id: number | null
+  user_id: string | null
+  title: string
+  title_locked: boolean
+  pinned: boolean
+  pinned_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMessageApi {
+  message_id: string
+  session_id: string
+  role: string
+  content: string
+  citations?: Citation[] | null
+  created_at: string
+}
+
+export interface ChatSessionDetailApi extends ChatSessionApi {
+  messages: ChatMessageApi[]
+}
+
 export interface ChatSession {
   id: string
   title: string
+  title_locked: boolean
+  pinned: boolean
   time_label: string
+  updated_at: string
   messages: ChatMessage[]
 }
 

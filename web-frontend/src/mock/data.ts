@@ -41,6 +41,9 @@ export const mockSessions: ChatSession[] = [
   {
     id: 's1',
     title: '草甘膦 欧盟登记资料',
+    title_locked: false,
+    pinned: true,
+    updated_at: '2026-08-11T10:24:00+08:00',
     time_label: '10:24',
     messages: [
       {
@@ -89,6 +92,9 @@ export const mockSessions: ChatSession[] = [
   {
     id: 's2',
     title: 'PPDB 物质查询',
+    title_locked: false,
+    pinned: false,
+    updated_at: '2026-08-10T16:02:00+08:00',
     time_label: '昨天',
     messages: [
       {
@@ -118,6 +124,9 @@ export const mockSessions: ChatSession[] = [
   {
     id: 's3',
     title: '国标检索入口',
+    title_locked: true,
+    pinned: false,
+    updated_at: '2026-05-19T11:08:00+08:00',
     time_label: '5/19',
     messages: [
       {
