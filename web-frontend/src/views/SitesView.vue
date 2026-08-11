@@ -1,17 +1,47 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Plus, Refresh, Search } from '@element-plus/icons-vue'
-import { ApiError } from '../api/http'
-import { ensureDefaultKnowledgeBase } from '../api/kb'
+import {onMounted, reactive, ref, watch} from 'vue'
+import {ElMessage} from 'element-plus'
+import {Plus, Refresh, Search} from '@element-plus/icons-vue'
+import {ApiError} from '../api/http'
+import {ensureDefaultKnowledgeBase} from '../api/kb'
 import {
   createSource,
   listSources,
   probeSources,
   updateSource,
 } from '../api/sources'
-import { categoryLabel } from '../mock/data'
-import type { SourceSite, SiteStatus } from '../types'
+import {categoryLabel} from '../mock/data'
+import type {CrawlMode, SourceSite, SiteStatus} from '../types'
+
+const crawlModeLabel: Record<CrawlMode, string> = {
+  manual: '人工上传',
+  single_page: '单页采集',
+  list_harvest: '列表收获',
+  connector: '站点连接器',
+}
+
+const crawlModeOptions: { value: CrawlMode; label: string; hint: string }[] = [
+  {
+    value: 'manual',
+    label: '人工上传',
+    hint: '不做自动抓取，由人工下载后上传（登录墙、不稳定站适用）',
+  },
+  {
+    value: 'single_page',
+    label: '单页采集',
+    hint: '只抓取入口 URL 这一页的正文',
+  },
+  {
+    value: 'list_harvest',
+    label: '列表收获',
+    hint: '从列表页发现多条报告/链接，再下载详情或 PDF',
+  },
+  {
+    value: 'connector',
+    label: '站点连接器',
+    hint: '走站点专用适配器（检索表单、已知 API 等）',
+  },
+]
 
 const kbId = ref<number | null>(null)
 const kbName = ref('')
@@ -121,9 +151,9 @@ async function save() {
   }
 
   const domains = domainsText.value
-    .split(/[\n,]/)
-    .map((x) => x.trim())
-    .filter(Boolean)
+      .split(/[\n,]/)
+      .map((x) => x.trim())
+      .filter(Boolean)
   const entryUrl = form.entry_url.trim() || null
 
   saving.value = true
@@ -168,9 +198,9 @@ async function probeOne(row: SourceSite) {
     const data = await probeSources(kbId.value, [row.site_id])
     const item = data.results[0]
     ElMessage.success(
-      item
-        ? `${item.name} 探活完成：${item.last_probe_status || '—'}`
-        : '探活完成',
+        item
+            ? `${item.name} 探活完成：${item.last_probe_status || '—'}`
+            : '探活完成',
     )
     await loadSites()
   } catch (e) {
@@ -186,8 +216,8 @@ async function probeBatch() {
   }
   try {
     const data = await probeSources(
-      kbId.value,
-      sites.value.map((s) => s.site_id),
+        kbId.value,
+        sites.value.map((s) => s.site_id),
     )
     ElMessage.success(`批量探活完成：${data.results.length} 条`)
     await loadSites()
@@ -199,13 +229,13 @@ async function probeBatch() {
 async function toggleDisable(row: SourceSite) {
   if (kbId.value == null) return
   const next: SiteStatus =
-    row.status === 'disabled'
-      ? row.entry_url
-        ? 'active'
-        : 'pending_url'
-      : 'disabled'
+      row.status === 'disabled'
+          ? row.entry_url
+              ? 'active'
+              : 'pending_url'
+          : 'disabled'
   try {
-    await updateSource(kbId.value, row.site_id, { status: next })
+    await updateSource(kbId.value, row.site_id, {status: next})
     ElMessage.success(next === 'disabled' ? '已停用' : '已启用')
     await loadSites()
   } catch (e) {
@@ -245,34 +275,34 @@ onMounted(async () => {
 
     <div class="toolbar">
       <el-input
-        v-model="keyword"
-        clearable
-        placeholder="搜索名称或 URL"
-        :prefix-icon="Search"
-        class="search"
+          v-model="keyword"
+          clearable
+          placeholder="搜索名称或 URL"
+          :prefix-icon="Search"
+          class="search"
       />
       <el-select v-model="region" clearable placeholder="地区 全部" class="filter">
-        <el-option label="US" value="US" />
-        <el-option label="EU" value="EU" />
-        <el-option label="UK" value="UK" />
-        <el-option label="AU" value="AU" />
-        <el-option label="JP" value="JP" />
-        <el-option label="CN" value="CN" />
-        <el-option label="INT" value="INT" />
+        <el-option label="US" value="US"/>
+        <el-option label="EU" value="EU"/>
+        <el-option label="UK" value="UK"/>
+        <el-option label="AU" value="AU"/>
+        <el-option label="JP" value="JP"/>
+        <el-option label="CN" value="CN"/>
+        <el-option label="INT" value="INT"/>
       </el-select>
       <el-select v-model="category" clearable placeholder="类别 全部" class="filter">
-        <el-option label="登记" value="registration" />
-        <el-option label="评审" value="evaluation" />
-        <el-option label="标准" value="standard" />
-        <el-option label="数据库" value="database" />
+        <el-option label="登记" value="registration"/>
+        <el-option label="评审" value="evaluation"/>
+        <el-option label="标准" value="standard"/>
+        <el-option label="数据库" value="database"/>
       </el-select>
       <el-select v-model="status" clearable placeholder="状态 全部" class="filter">
-        <el-option label="active" value="active" />
-        <el-option label="pending_url" value="pending_url" />
-        <el-option label="broken" value="broken" />
-        <el-option label="disabled" value="disabled" />
+        <el-option label="active" value="active"/>
+        <el-option label="pending_url" value="pending_url"/>
+        <el-option label="broken" value="broken"/>
+        <el-option label="disabled" value="disabled"/>
       </el-select>
-      <div class="spacer" />
+      <div class="spacer"/>
       <el-button :icon="Refresh" :loading="loading" @click="loadSites">刷新</el-button>
       <el-button type="primary" :icon="Plus" @click="openCreate">新建站点</el-button>
       <el-button :loading="loading" @click="probeBatch">批量探活</el-button>
@@ -280,26 +310,31 @@ onMounted(async () => {
 
     <div class="table-wrap" v-loading="loading">
       <el-table :data="sites" stripe height="100%" empty-text="暂无站点，点击「新建站点」添加">
-        <el-table-column prop="name" label="名称" min-width="160" fixed />
-        <el-table-column prop="site_id" label="站点 ID" min-width="120" show-overflow-tooltip />
-        <el-table-column prop="region" label="地区" width="80" />
+        <el-table-column prop="name" label="名称" min-width="160" fixed/>
+        <el-table-column prop="site_id" label="站点 ID" min-width="120" show-overflow-tooltip/>
+        <el-table-column prop="region" label="地区" width="80"/>
         <el-table-column label="类别" width="90">
           <template #default="{ row }">{{ categoryLabel[row.category] || row.category }}</template>
         </el-table-column>
         <el-table-column label="入口 URL" min-width="220" show-overflow-tooltip>
           <template #default="{ row }">
             <a v-if="row.entry_url" :href="row.entry_url" target="_blank" rel="noreferrer">{{
-              row.entry_url
-            }}</a>
+                row.entry_url
+              }}</a>
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="crawl_mode" label="采集模式" width="120" />
+        <el-table-column label="采集模式" width="120">
+          <template #default="{ row }">
+            {{ crawlModeLabel[row.crawl_mode as CrawlMode] || row.crawl_mode }}
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small" effect="light">{{
-              row.status
-            }}</el-tag>
+                row.status
+              }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="最近探活" width="110">
@@ -320,71 +355,82 @@ onMounted(async () => {
     </div>
 
     <el-drawer
-      v-model="drawerVisible"
-      :title="drawerMode === 'create' ? '新建站点' : '编辑站点'"
-      size="420px"
-      destroy-on-close
+        v-model="drawerVisible"
+        :title="drawerMode === 'create' ? '新建站点' : '编辑站点'"
+        size="420px"
+        destroy-on-close
     >
       <el-form label-position="top">
         <el-form-item label="站点 ID" required>
           <el-input
-            v-model="form.site_id"
-            :disabled="drawerMode === 'edit'"
-            placeholder="如 us_ppis（英文/数字/_/-）"
+              v-model="form.site_id"
+              :disabled="drawerMode === 'edit'"
+              placeholder="如 us_ppis（英文/数字/_/-）"
           />
         </el-form-item>
         <el-form-item label="名称" required>
-          <el-input v-model="form.name" />
+          <el-input v-model="form.name"/>
         </el-form-item>
         <el-form-item label="地区" required>
           <el-select v-model="form.region" style="width: 100%">
             <el-option
-              v-for="r in ['US', 'EU', 'UK', 'AU', 'JP', 'CN', 'INT']"
-              :key="r"
-              :label="r"
-              :value="r"
+                v-for="r in ['US', 'EU', 'UK', 'AU', 'JP', 'CN', 'INT']"
+                :key="r"
+                :label="r"
+                :value="r"
             />
           </el-select>
         </el-form-item>
         <el-form-item label="类别" required>
           <el-select v-model="form.category" style="width: 100%">
-            <el-option label="登记" value="registration" />
-            <el-option label="评审" value="evaluation" />
-            <el-option label="标准" value="standard" />
-            <el-option label="数据库" value="database" />
+            <el-option label="登记" value="registration"/>
+            <el-option label="评审" value="evaluation"/>
+            <el-option label="标准" value="standard"/>
+            <el-option label="数据库" value="database"/>
           </el-select>
         </el-form-item>
         <el-form-item label="入口 URL">
-          <el-input v-model="form.entry_url" placeholder="可留空，状态将为 pending_url" />
+          <el-input v-model="form.entry_url" placeholder="可留空，状态将为 pending_url"/>
         </el-form-item>
         <el-form-item label="采集模式" required>
           <el-select v-model="form.crawl_mode" style="width: 100%">
-            <el-option label="manual" value="manual" />
-            <el-option label="single_page" value="single_page" />
-            <el-option label="list_harvest" value="list_harvest" />
-            <el-option label="connector" value="connector" />
+            <el-option
+                v-for="opt in crawlModeOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+            />
           </el-select>
+          <p class="field-hint">
+            {{
+              crawlModeOptions.find((o) => o.value === form.crawl_mode)?.hint ||
+              '决定资料如何进入知识库'
+            }}
+          </p>
         </el-form-item>
         <el-form-item v-if="drawerMode === 'edit'" label="状态">
           <el-select v-model="form.status" style="width: 100%">
-            <el-option label="active" value="active" />
-            <el-option label="pending_url" value="pending_url" />
-            <el-option label="broken" value="broken" />
-            <el-option label="disabled" value="disabled" />
+            <el-option label="active" value="active"/>
+            <el-option label="pending_url" value="pending_url"/>
+            <el-option label="broken" value="broken"/>
+            <el-option label="disabled" value="disabled"/>
           </el-select>
         </el-form-item>
         <el-form-item label="域名白名单">
           <el-input
-            v-model="domainsText"
-            type="textarea"
-            :rows="3"
-            placeholder="每行一个域名"
-            maxlength="1000"
-            show-word-limit
+              v-model="domainsText"
+              type="textarea"
+              :rows="3"
+              placeholder="每行一个域名，如 efsa.europa.eu"
+              maxlength="1000"
+              show-word-limit
           />
+          <p class="field-hint">
+            限制探活与后续采集只能访问这些域名及其子域；留空则探活不按域名拦截。用于防止请求跳转到无关或内网地址。
+          </p>
         </el-form-item>
         <el-form-item label="备注">
-          <el-input v-model="form.notes" type="textarea" :rows="4" maxlength="500" show-word-limit />
+          <el-input v-model="form.notes" type="textarea" :rows="4" maxlength="500" show-word-limit/>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -446,6 +492,13 @@ onMounted(async () => {
 }
 
 .muted {
+  color: var(--cacch-text-secondary);
+}
+
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--cacch-text-secondary);
 }
 </style>
