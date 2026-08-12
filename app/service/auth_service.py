@@ -1,4 +1,4 @@
-"""Auth domain services: login, password, org/role/user admin."""
+"""认证与 RBAC 领域服务：登录、密码、组织/角色/用户管理。"""
 
 from __future__ import annotations
 
@@ -68,6 +68,8 @@ _ADMIN_MENUS = frozenset({"menus", "orgs", "roles", "users"})
 
 @dataclass
 class CurrentUser:
+    """当前请求上下文中的已认证用户（或服务账号）。"""
+
     id: int
     staff_no: str
     mobile: str
@@ -80,12 +82,14 @@ class CurrentUser:
     is_service: bool = False
 
     def require_menu(self, menu_id: str) -> None:
+        """校验当前用户拥有指定菜单权限；服务账号跳过。"""
         if self.is_service:
             return
         if menu_id not in self.menu_ids:
             raise ForbiddenError(f"missing menu permission: {menu_id}")
 
     def require_business_access(self) -> None:
+        """校验用户已完成强制改密，可访问业务功能；服务账号跳过。"""
         if self.is_service:
             return
         if self.must_change_password:
@@ -93,6 +97,8 @@ class CurrentUser:
 
 
 class AuthService:
+    """认证、会话、组织/角色/用户及审计日志业务逻辑。"""
+
     def __init__(
         self,
         session: Session,
@@ -113,6 +119,7 @@ class AuthService:
         client_ip: str | None = None,
         user_agent: str | None = None,
     ) -> LoginOut:
+        """手机号密码登录，签发访问令牌并创建会话。"""
         user = self._repo.get_user_by_mobile(payload.mobile.strip())
         if user is None:
             self._audit(
@@ -200,6 +207,7 @@ class AuthService:
         )
 
     def logout(self, current: CurrentUser) -> None:
+        """撤销当前会话并记录登出审计。"""
         if current.is_service or current.session_id is None:
             return
         session = self._repo.get_session(current.session_id)
@@ -211,6 +219,7 @@ class AuthService:
         self._session.commit()
 
     def me(self, current: CurrentUser) -> AuthUserOut:
+        """返回当前登录用户资料与菜单权限。"""
         if current.is_service:
             return AuthUserOut(
                 id=0,
@@ -238,6 +247,7 @@ class AuthService:
     def change_password(
         self, current: CurrentUser, payload: ChangePasswordRequest
     ) -> None:
+        """用户修改密码，并使全部旧会话失效。"""
         if current.is_service:
             raise ValidationAppError("service account cannot change password")
         user = self._repo.get_user(current.id)
@@ -259,6 +269,7 @@ class AuthService:
         self._session.commit()
 
     def resolve_bearer(self, token: str) -> CurrentUser:
+        """解析 Bearer 令牌：服务令牌或用户 JWT，返回 CurrentUser。"""
         if token == self._settings.api_auth_token:
             return CurrentUser(
                 id=0,
@@ -304,6 +315,7 @@ class AuthService:
 
     # ------------------------------------------------------------------ menus
     def list_menus(self) -> MenuListOut:
+        """列出全部启用中的可分配菜单。"""
         items = [
             MenuOut.model_validate(m) for m in self._repo.list_menus(active_only=True)
         ]
@@ -311,11 +323,13 @@ class AuthService:
 
     # ------------------------------------------------------------------ orgs
     def list_orgs(self) -> OrgListOut:
+        """列出全部组织。"""
         return OrgListOut(
             items=[OrgOut.model_validate(o) for o in self._repo.list_orgs()]
         )
 
     def create_org(self, current: CurrentUser, payload: OrgCreate) -> OrgOut:
+        """创建组织节点。"""
         current.require_menu("orgs")
         current.require_business_access()
         if (
@@ -343,6 +357,7 @@ class AuthService:
     def update_org(
         self, current: CurrentUser, org_id: int, payload: OrgUpdate
     ) -> OrgOut:
+        """部分更新组织信息。"""
         current.require_menu("orgs")
         current.require_business_access()
         org = self._repo.get_org(org_id)
@@ -369,6 +384,7 @@ class AuthService:
 
     # ------------------------------------------------------------------ roles
     def list_roles(self) -> RoleListOut:
+        """列出全部角色及其菜单权限。"""
         items: list[RoleOut] = []
         for role in self._repo.list_roles():
             items.append(
@@ -384,6 +400,7 @@ class AuthService:
         return RoleListOut(items=items)
 
     def create_role(self, current: CurrentUser, payload: RoleCreate) -> RoleOut:
+        """创建自定义角色并绑定菜单。"""
         current.require_menu("roles")
         current.require_business_access()
         if self._repo.get_role_by_code(payload.code.strip()) is not None:
@@ -413,6 +430,7 @@ class AuthService:
     def update_role(
         self, current: CurrentUser, role_id: int, payload: RoleUpdate
     ) -> RoleOut:
+        """部分更新角色及菜单绑定。"""
         current.require_menu("roles")
         current.require_business_access()
         role = self._repo.get_role(role_id)
@@ -443,6 +461,7 @@ class AuthService:
 
     # ------------------------------------------------------------------ users
     def preview_hr(self, current: CurrentUser, mobile: str) -> HrPreviewOut:
+        """根据手机号预览 HR 人员信息，用于开户前校验。"""
         current.require_menu("users")
         current.require_business_access()
         person = self._require_hr_person(mobile.strip())
@@ -462,6 +481,7 @@ class AuthService:
         org_id: int | None = None,
         status: str | None = None,
     ) -> UserListOut:
+        """按关键字、组织、状态筛选用户列表。"""
         current.require_menu("users")
         current.require_business_access()
         users = self._repo.list_users(keyword=keyword, org_id=org_id, status=status)
@@ -471,6 +491,7 @@ class AuthService:
         )
 
     def create_user(self, current: CurrentUser, payload: UserCreate) -> UserCreateOut:
+        """为在职 HR 人员开户并分配组织、角色与菜单。"""
         current.require_menu("users")
         current.require_business_access()
         person = self._require_hr_person(payload.mobile.strip())
@@ -529,6 +550,7 @@ class AuthService:
     def update_user(
         self, current: CurrentUser, user_id: int, payload: UserUpdate
     ) -> UserOut:
+        """部分更新用户组织、角色、菜单或状态。"""
         current.require_menu("users")
         current.require_business_access()
         user = self._repo.get_user(user_id)
@@ -571,6 +593,7 @@ class AuthService:
     def reset_password(
         self, current: CurrentUser, user_id: int, payload: ResetPasswordRequest
     ) -> ResetPasswordOut:
+        """管理员重置用户密码并强制下次登录改密。"""
         current.require_menu("users")
         current.require_business_access()
         user = self._repo.get_user(user_id)
@@ -589,7 +612,7 @@ class AuthService:
         return ResetPasswordOut(plain_password=plain)
 
     def bootstrap_admin(self, payload: BootstrapAdminRequest) -> UserCreateOut:
-        """First admin when no users exist; caller must use service token."""
+        """系统无用户时创建首个管理员；调用方须使用服务令牌。"""
         if self._repo.count_users() > 0:
             raise ValidationAppError("users already exist; bootstrap disabled")
         person = self._require_hr_person(payload.mobile.strip())
@@ -638,9 +661,11 @@ class AuthService:
 
     # ------------------------------------------------------------------ helpers
     def _token_secret(self) -> str:
+        """返回 JWT 签名密钥，未配置时回退到 API 服务令牌。"""
         return self._settings.auth_token_secret or self._settings.api_auth_token
 
     def _session_expiry(self, remember_today: bool) -> datetime:
+        """计算会话过期时间：今日有效或固定小时数。"""
         now = now_app()
         if remember_today:
             # Asia/Shanghai natural day end
@@ -650,12 +675,14 @@ class AuthService:
         return now + timedelta(hours=self._settings.auth_access_token_hours)
 
     def _require_hr_person(self, mobile: str) -> PersonDetailRow:
+        """按手机号查找 HR 人员，不存在则禁止开户。"""
         person = self._hr.find_by_mobile(mobile)
         if person is None:
             raise ValidationAppError("persondetail 中不存在该手机号，禁止开户")
         return person
 
     def _validate_menu_ids(self, menu_ids: list[str]) -> list[str]:
+        """去重并校验菜单 ID 均存在且启用。"""
         unique = list(dict.fromkeys(menu_ids))
         for mid in unique:
             menu = self._repo.get_menu(mid)
@@ -666,6 +693,7 @@ class AuthService:
     def _resolve_new_password(
         self, password: str | None, generate_password: bool
     ) -> str:
+        """解析新密码：随机生成或校验强度后返回明文。"""
         if generate_password or not password:
             return generate_random_password()
         err = validate_password_strength(password)
@@ -674,6 +702,7 @@ class AuthService:
         return password
 
     def _user_out(self, user: UserAccount) -> UserOut:
+        """用户 ORM 实体转 API 输出模型（含组织/角色名称）。"""
         org = self._repo.get_org(user.org_id)
         role = self._repo.get_role(user.role_id) if user.role_id else None
         return UserOut(
@@ -704,6 +733,7 @@ class AuthService:
         detail: dict[str, Any] | None = None,
         client_ip: str | None = None,
     ) -> None:
+        """写入审计日志记录。"""
         actor_user_id, actor_staff_no = self._actor_ids(actor)
         self._repo.add_audit(
             AuditLog(
@@ -722,6 +752,7 @@ class AuthService:
     def _actor_ids(
         actor: CurrentUser | UserAccount | None,
     ) -> tuple[int | None, str | None]:
+        """从操作者对象提取 user_id 与 staff_no；服务账号或无操作者返回 None。"""
         if isinstance(actor, CurrentUser):
             if actor.is_service:
                 return None, None

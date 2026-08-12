@@ -1,4 +1,4 @@
-"""Knowledge base schemas."""
+"""知识库相关 Pydantic 请求/响应模型。"""
 
 from datetime import datetime
 
@@ -6,14 +6,18 @@ from pydantic import BaseModel, Field, field_serializer
 
 
 class KnowledgeBaseCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=128)
-    description: str | None = Field(default=None, max_length=512)
-    embedding_model: str = Field(min_length=1, max_length=128)
-    embedding_dim: int = Field(default=2048, gt=0)
-    status: int = Field(default=1)
+    """创建知识库请求体。"""
+
+    name: str = Field(min_length=1, max_length=128, description="知识库名称")
+    description: str | None = Field(default=None, max_length=512, description="描述")
+    embedding_model: str = Field(min_length=1, max_length=128, description="向量模型")
+    embedding_dim: int = Field(default=2048, gt=0, description="向量维度")
+    status: int = Field(default=1, description="状态：1 启用")
 
 
 class KnowledgeBaseOut(BaseModel):
+    """知识库详情输出。"""
+
     id: int
     name: str
     description: str | None
@@ -34,5 +38,7 @@ class KnowledgeBaseOut(BaseModel):
 
 
 class KnowledgeBaseListOut(BaseModel):
+    """知识库列表响应。"""
+
     items: list[KnowledgeBaseOut]
     total: int

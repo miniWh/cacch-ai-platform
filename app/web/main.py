@@ -1,4 +1,4 @@
-"""FastAPI application entry."""
+"""FastAPI 应用入口与生命周期。"""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -20,6 +20,7 @@ from app.web.config import get_settings
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """应用启动时初始化数据库、认证种子与默认知识库。"""
     init_db()
     session = get_session_factory()()
     try:
@@ -31,6 +32,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
+    """创建并配置 FastAPI 应用实例。"""
     settings = get_settings()
     application = FastAPI(
         title=settings.app_name,
@@ -49,10 +51,7 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(AppError)
     async def _app_error_handler(_: Request, exc: AppError) -> JSONResponse:
-        if exc.code in (401, 403):
-            status = exc.code
-        else:
-            status = 200
+        status = exc.code if exc.code in (401, 403) else 200
         return JSONResponse(
             status_code=status,
             content=fail(exc.code, exc.message),
@@ -60,6 +59,7 @@ def create_app() -> FastAPI:
 
     @application.get("/api/v1/health")
     def health() -> dict:
+        """健康检查接口。"""
         return {"code": 0, "message": "ok", "data": {"status": "ok"}}
 
     application.include_router(auth_router)

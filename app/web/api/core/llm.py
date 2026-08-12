@@ -1,4 +1,4 @@
-"""LLM / Embedding APIs for platform core (chat + smoke)."""
+"""LLM / Embedding HTTP API：对话台与冒烟测试。"""
 
 from __future__ import annotations
 
@@ -32,36 +32,48 @@ DEFAULT_ASSISTANT_SYSTEM = (
 
 
 class ChatSmokeRequest(BaseModel):
-    prompt: str = Field(min_length=1, max_length=4000)
-    profile_id: str = "rag_chat"
-    system: str | None = Field(default=None, max_length=2000)
+    """单轮对话冒烟测试请求体。"""
+
+    prompt: str = Field(min_length=1, max_length=4000, description="用户提示词")
+    profile_id: str = Field(default="rag_chat", description="LLM 配置别名")
+    system: str | None = Field(default=None, max_length=2000, description="系统提示词")
 
 
 class EmbedSmokeRequest(BaseModel):
-    texts: list[str] = Field(min_length=1, max_length=16)
-    profile_id: str = "embed_default"
+    """向量化冒烟测试请求体。"""
+
+    texts: list[str] = Field(min_length=1, max_length=16, description="待嵌入文本列表")
+    profile_id: str = Field(default="embed_default", description="Embedding 配置别名")
 
 
 class ChatMessageIn(BaseModel):
+    """对话消息输入。"""
+
     role: Literal["system", "user", "assistant"]
-    content: str = Field(min_length=1, max_length=16000)
+    content: str = Field(min_length=1, max_length=16000, description="消息内容")
 
 
 class ChatCompletionsRequest(BaseModel):
-    messages: list[ChatMessageIn] = Field(min_length=1, max_length=40)
-    profile_id: str = "rag_chat"
-    stream: bool = True
+    """多轮对话补全请求体。"""
+
+    messages: list[ChatMessageIn] = Field(
+        min_length=1, max_length=40, description="消息列表"
+    )
+    profile_id: str = Field(default="rag_chat", description="LLM 配置别名")
+    stream: bool = Field(default=True, description="是否 SSE 流式返回")
     # 未传 system 时使用默认助手人设
-    system: str | None = Field(default=None, max_length=4000)
+    system: str | None = Field(default=None, max_length=4000, description="系统提示词")
 
 
 def _gateway(settings: Settings = Depends(get_settings)) -> LlmGateway:
+    """FastAPI 依赖：构造 LlmGateway。"""
     return LlmGateway(settings)
 
 
 def _to_messages(
-        payload: ChatCompletionsRequest,
+    payload: ChatCompletionsRequest,
 ) -> list[ChatMessage]:
+    """将 API 请求体转换为网关内部消息列表（补全默认 system）。"""
     messages: list[ChatMessage] = []
     has_system = any(m.role == "system" for m in payload.messages)
     system_text = (
@@ -76,9 +88,10 @@ def _to_messages(
 
 @router.post("/chat", dependencies=[Depends(require_business_user)])
 def smoke_chat(
-        payload: ChatSmokeRequest,
-        gateway: LlmGateway = Depends(_gateway),
+    payload: ChatSmokeRequest,
+    gateway: LlmGateway = Depends(_gateway),
 ) -> dict[str, Any]:
+    """单轮 LLM 对话冒烟测试。"""
     messages: list[ChatMessage] = []
     if payload.system:
         messages.append(ChatMessage(role="system", content=payload.system))
@@ -105,8 +118,8 @@ def smoke_chat(
 
 @router.post("/chat/completions", dependencies=[Depends(require_business_user)])
 def chat_completions(
-        payload: ChatCompletionsRequest,
-        gateway: LlmGateway = Depends(_gateway),
+    payload: ChatCompletionsRequest,
+    gateway: LlmGateway = Depends(_gateway),
 ) -> Any:
     """对话台主接口：支持多轮；stream=true 时返回 SSE。"""
     messages = _to_messages(payload)
@@ -134,42 +147,42 @@ def chat_completions(
         try:
             for token in gateway.chat_stream(messages, payload.profile_id, meta):
                 yield (
-                        "data: "
-                        + json.dumps(
-                    {"type": "token", "content": token},
-                    ensure_ascii=False,
-                )
-                        + "\n\n"
-                )
-            yield (
                     "data: "
                     + json.dumps(
-                {
-                    "type": "done",
-                    "request_id": request_id,
-                    "profile_id": payload.profile_id,
-                },
-                ensure_ascii=False,
-            )
+                        {"type": "token", "content": token},
+                        ensure_ascii=False,
+                    )
                     + "\n\n"
+                )
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "type": "done",
+                        "request_id": request_id,
+                        "profile_id": payload.profile_id,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n\n"
             )
         except LlmError as exc:
             yield (
-                    "data: "
-                    + json.dumps(
-                {"type": "error", "message": exc.message, "code": exc.code},
-                ensure_ascii=False,
-            )
-                    + "\n\n"
+                "data: "
+                + json.dumps(
+                    {"type": "error", "message": exc.message, "code": exc.code},
+                    ensure_ascii=False,
+                )
+                + "\n\n"
             )
         except Exception as exc:  # noqa: BLE001
             yield (
-                    "data: "
-                    + json.dumps(
-                {"type": "error", "message": str(exc), "code": 502},
-                ensure_ascii=False,
-            )
-                    + "\n\n"
+                "data: "
+                + json.dumps(
+                    {"type": "error", "message": str(exc), "code": 502},
+                    ensure_ascii=False,
+                )
+                + "\n\n"
             )
 
     return StreamingResponse(
@@ -185,9 +198,10 @@ def chat_completions(
 
 @router.post("/embed", dependencies=[Depends(require_business_user)])
 def smoke_embed(
-        payload: EmbedSmokeRequest,
-        gateway: LlmGateway = Depends(_gateway),
+    payload: EmbedSmokeRequest,
+    gateway: LlmGateway = Depends(_gateway),
 ) -> dict[str, Any]:
+    """批量文本向量化冒烟测试。"""
     vectors = gateway.embed_batch(
         payload.texts,
         payload.profile_id,
@@ -204,8 +218,9 @@ def smoke_embed(
 
 @router.get("/profiles", dependencies=[Depends(require_business_user)])
 def list_profiles(
-        settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
+    """列出已配置的 LLM / Embedding 配置项。"""
     try:
         profiles = build_profiles(settings)
     except LlmConfigError as exc:

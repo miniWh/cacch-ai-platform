@@ -1,4 +1,4 @@
-"""Idempotent seed for menus / roles / root org."""
+"""认证与 RBAC 初始数据幂等种子（菜单、角色、根组织）。"""
 
 from __future__ import annotations
 
@@ -35,6 +35,7 @@ _ROLE_MENUS: dict[str, list[str]] = {
 
 
 def ensure_auth_seed(session: Session) -> None:
+    """幂等写入默认菜单、系统角色及根组织；已存在则更新元数据。"""
     repo = AuthRbacRepository(session)
     for mid, title, path, icon, sort in _DEFAULT_MENUS:
         existing = repo.get_menu(mid)

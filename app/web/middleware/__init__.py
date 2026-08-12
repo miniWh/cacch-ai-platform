@@ -1,1 +1,1 @@
-"""Web middleware package."""
+"""Web 中间件包。"""

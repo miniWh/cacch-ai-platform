@@ -1,4 +1,4 @@
-"""HMAC access tokens for user sessions."""
+"""基于 HMAC 的访问令牌签发与校验。"""
 
 from __future__ import annotations
 
@@ -22,6 +22,8 @@ def _b64decode(raw: str) -> bytes:
 
 @dataclass(frozen=True)
 class AccessTokenClaims:
+    """访问令牌解析后的声明载荷。"""
+
     user_id: int
     session_id: int
     token_version: int
@@ -29,13 +31,25 @@ class AccessTokenClaims:
 
 
 def issue_access_token(
-    *,
-    secret: str,
-    user_id: int,
-    session_id: int,
-    token_version: int,
-    expires_at_ts: int,
+        *,
+        secret: str,
+        user_id: int,
+        session_id: int,
+        token_version: int,
+        expires_at_ts: int,
 ) -> str:
+    """签发 HMAC 签名的访问令牌。
+
+    Args:
+        secret: HMAC 密钥。
+        user_id: 用户 ID。
+        session_id: 会话 ID。
+        token_version: 令牌版本号，用于强制失效旧令牌。
+        expires_at_ts: 过期时间（Unix 秒级时间戳）。
+
+    Returns:
+        ``body.signature`` 格式的 URL-safe Base64 令牌字符串。
+    """
     payload = {
         "uid": user_id,
         "sid": session_id,
@@ -50,6 +64,15 @@ def issue_access_token(
 
 
 def parse_access_token(token: str, *, secret: str) -> AccessTokenClaims | None:
+    """校验并解析访问令牌。
+
+    Args:
+        token: 待校验的令牌字符串。
+        secret: 与签发时相同的 HMAC 密钥。
+
+    Returns:
+        校验通过且未过期时返回 ``AccessTokenClaims``，否则 ``None``。
+    """
     try:
         body, sig = token.split(".", 1)
         expected = _b64encode(
@@ -74,4 +97,12 @@ def parse_access_token(token: str, *, secret: str) -> AccessTokenClaims | None:
 
 
 def hash_refresh_token(raw: str) -> str:
+    """对原始刷新令牌做 SHA-256 哈希，用于持久化存储。
+
+    Args:
+        raw: 明文刷新令牌。
+
+    Returns:
+        十六进制哈希字符串。
+    """
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

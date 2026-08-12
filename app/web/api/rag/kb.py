@@ -1,4 +1,4 @@
-"""RAG knowledge base API routes."""
+"""RAG 知识库 HTTP API 路由。"""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -17,11 +17,13 @@ router = APIRouter(
 
 
 def _service(db: Session = Depends(get_db)) -> KnowledgeBaseService:
+    """FastAPI 依赖：构造 KnowledgeBaseService。"""
     return KnowledgeBaseService(db)
 
 
 @router.get("")
 def list_kbs(service: KnowledgeBaseService = Depends(_service)) -> dict:
+    """列出全部知识库。"""
     data = service.list_kbs()
     return ok(data.model_dump(mode="json"))
 
@@ -31,11 +33,13 @@ def create_kb(
     payload: KnowledgeBaseCreate,
     service: KnowledgeBaseService = Depends(_service),
 ) -> dict:
+    """创建知识库。"""
     data = service.create_kb(payload)
     return ok(data.model_dump(mode="json"))
 
 
 @router.post("/ensure-default")
 def ensure_default_kb(service: KnowledgeBaseService = Depends(_service)) -> dict:
+    """幂等确保存在默认知识库。"""
     data = service.ensure_default_kb()
     return ok(data.model_dump(mode="json"))

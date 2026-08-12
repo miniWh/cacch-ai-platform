@@ -1,1 +1,1 @@
-"""Shared helpers used across capability domains."""
+"""跨能力域共享的工具与基础类型。"""

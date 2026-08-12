@@ -1,1 +1,1 @@
-"""Platform shared AI core (LLM / Embedding)."""
+"""平台 AI 核心能力包（LLM 与 Embedding）。"""

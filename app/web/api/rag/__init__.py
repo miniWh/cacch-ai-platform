@@ -1,4 +1,4 @@
-"""RAG API routers."""
+"""RAG API 路由聚合。"""
 
 from fastapi import APIRouter
 

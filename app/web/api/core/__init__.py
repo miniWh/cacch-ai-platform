@@ -1,4 +1,4 @@
-"""Core platform API routers."""
+"""平台核心 API 路由聚合。"""
 
 from fastapi import APIRouter
 

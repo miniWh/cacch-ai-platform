@@ -1,4 +1,4 @@
-"""Knowledge base service."""
+"""知识库业务服务。"""
 
 from sqlalchemy.orm import Session
 
@@ -13,12 +13,15 @@ from app.web.config import Settings, get_settings
 
 
 class KnowledgeBaseService:
+    """知识库 CRUD 与默认库引导。"""
+
     def __init__(self, session: Session, settings: Settings | None = None) -> None:
         self._session = session
         self._repo = KnowledgeBaseRepository(session)
         self._settings = settings or get_settings()
 
     def list_kbs(self) -> KnowledgeBaseListOut:
+        """列出全部知识库。"""
         items = self._repo.list_all()
         return KnowledgeBaseListOut(
             items=[KnowledgeBaseOut.model_validate(i) for i in items],
@@ -26,6 +29,7 @@ class KnowledgeBaseService:
         )
 
     def create_kb(self, payload: KnowledgeBaseCreate) -> KnowledgeBaseOut:
+        """创建知识库。"""
         entity = KnowledgeBase(
             name=payload.name,
             description=payload.description,
@@ -39,7 +43,7 @@ class KnowledgeBaseService:
         return KnowledgeBaseOut.model_validate(entity)
 
     def ensure_default_kb(self) -> KnowledgeBaseOut:
-        """Idempotent bootstrap so sources APIs have a kb_id to bind."""
+        """幂等确保存在默认知识库，供站点等资源 API 绑定 kb_id。"""
         existing = self._repo.list_all()
         if existing:
             return KnowledgeBaseOut.model_validate(existing[0])

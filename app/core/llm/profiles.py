@@ -1,4 +1,4 @@
-"""Model profile definitions (MVP: built from env settings)."""
+"""模型 Profile 定义（MVP：由环境配置构建）。"""
 
 from dataclasses import dataclass
 from typing import Literal, cast
@@ -13,6 +13,8 @@ SUPPORTED_PROVIDERS: frozenset[str] = frozenset({"qwen"})
 
 @dataclass(frozen=True, slots=True)
 class ModelProfile:
+    """单次 LLM/Embedding 调用所需的模型与连接参数。"""
+
     profile_id: str
     provider: ProviderName
     kind: ProfileKind
@@ -44,7 +46,17 @@ def _provider(settings: Settings) -> ProviderName:
 
 
 def build_profiles(settings: Settings) -> dict[str, ModelProfile]:
-    """Static MVP profiles: rag_chat / default_chat / embed_default."""
+    """从应用配置构建静态 MVP profile 集合。
+
+    默认包含 ``rag_chat`` / ``default_chat`` / ``embed_default``，
+    若配置了备用模型则额外注册 fallback profile。
+
+    Args:
+        settings: 应用配置对象。
+
+    Returns:
+        profile_id 到 ``ModelProfile`` 的映射。
+    """
     provider = _provider(settings)
     api_key = _require(settings.llm_api_key, "LLM_API_KEY")
     base_url = settings.llm_base_url.rstrip("/")
@@ -102,6 +114,18 @@ def build_profiles(settings: Settings) -> dict[str, ModelProfile]:
 
 
 def get_profile(settings: Settings, profile_id: str) -> ModelProfile:
+    """按 ID 获取 profile，不存在时抛出配置错误。
+
+    Args:
+        settings: 应用配置对象。
+        profile_id: profile 标识符。
+
+    Returns:
+        对应的 ``ModelProfile`` 实例。
+
+    Raises:
+        LlmConfigError: profile_id 未知或配置不完整。
+    """
     profiles = build_profiles(settings)
     if profile_id not in profiles:
         raise LlmConfigError(f"unknown model profile: {profile_id}")

@@ -1,4 +1,4 @@
-"""Source site business service."""
+"""来源站点业务服务。"""
 
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,8 @@ from app.web.config import Settings, get_settings
 
 
 class SourceService:
+    """知识库下来源站点的增删改查与连通性探测。"""
+
     def __init__(self, session: Session, settings: Settings | None = None) -> None:
         self._session = session
         self._settings = settings or get_settings()
@@ -35,6 +37,7 @@ class SourceService:
         category: str | None = None,
         status: str | None = None,
     ) -> SourceListOut:
+        """按条件分页列出指定知识库下的来源站点。"""
         self._require_kb(kb_id)
         items = self._sources.list(
             kb_id,
@@ -49,6 +52,7 @@ class SourceService:
         )
 
     def get_source(self, kb_id: int, site_id: str) -> SourceSiteOut:
+        """获取单个来源站点详情。"""
         self._require_kb(kb_id)
         entity = self._sources.get(kb_id, site_id)
         if entity is None:
@@ -56,6 +60,7 @@ class SourceService:
         return SourceSiteOut.model_validate(entity)
 
     def create_source(self, kb_id: int, payload: SourceSiteCreate) -> SourceSiteOut:
+        """在指定知识库下创建来源站点；软删记录可复活复用。"""
         self._require_kb(kb_id)
 
         existing_any = self._session.get(SourceSite, payload.site_id)
@@ -101,6 +106,7 @@ class SourceService:
     def update_source(
         self, kb_id: int, site_id: str, payload: SourceSiteUpdate
     ) -> SourceSiteOut:
+        """部分更新来源站点字段。"""
         self._require_kb(kb_id)
         entity = self._sources.get(kb_id, site_id)
         if entity is None:
@@ -121,6 +127,7 @@ class SourceService:
         return SourceSiteOut.model_validate(entity)
 
     def delete_source(self, kb_id: int, site_id: str) -> None:
+        """软删除指定来源站点。"""
         self._require_kb(kb_id)
         entity = self._sources.get(kb_id, site_id)
         if entity is None:
@@ -128,6 +135,7 @@ class SourceService:
         self._sources.soft_delete(entity)
 
     def probe(self, kb_id: int, payload: ProbeRequest) -> ProbeResponse:
+        """探测站点入口 URL 可达性并回写状态。"""
         self._require_kb(kb_id)
         if payload.site_ids:
             entities: list[SourceSite] = []
@@ -156,5 +164,6 @@ class SourceService:
         return ProbeResponse(results=results)
 
     def _require_kb(self, kb_id: int) -> None:
+        """校验知识库存在，否则抛出 NotFoundError。"""
         if self._kbs.get(kb_id) is None:
             raise NotFoundError(f"knowledge base not found: {kb_id}")

@@ -1,4 +1,4 @@
-"""Link probe helper for source sites."""
+"""来源站点入口 URL 连通性探测工具。"""
 
 from urllib.parse import urlparse
 
@@ -10,6 +10,7 @@ from app.web.config import Settings
 
 
 def _host_allowed(hostname: str, allowed_domains: list[str]) -> bool:
+    """判断主机名是否在允许域名白名单内（含子域）。"""
     host = hostname.lower().rstrip(".")
     for domain in allowed_domains:
         d = domain.lower().lstrip(".")
@@ -20,9 +21,9 @@ def _host_allowed(hostname: str, allowed_domains: list[str]) -> bool:
 
 def probe_site(site: SourceSite, settings: Settings) -> tuple[str, str]:
     """
-    Probe entry_url.
+    探测站点 entry_url 可达性。
 
-    Returns (site_status, probe_status_label).
+    返回 (site_status, probe_status_label)。
     """
     now_status = site.status
     if not site.entry_url:
@@ -58,6 +59,7 @@ def probe_site(site: SourceSite, settings: Settings) -> tuple[str, str]:
 def apply_probe_result(
     site: SourceSite, site_status: str, probe_status: str
 ) -> SourceSite:
+    """将探测结果写回站点实体并返回。"""
     site.status = site_status
     site.last_probe_status = probe_status
     site.last_probe_at = now_app()

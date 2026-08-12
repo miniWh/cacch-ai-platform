@@ -1,4 +1,7 @@
-"""ORM models package."""
+"""ORM 模型包。
+
+统一导出认证、聊天、知识库、数据源站点等 SQLAlchemy 映射类。
+"""
 
 from app.dao.models.auth_rbac import (
     AuditLog,

@@ -1,4 +1,4 @@
-"""RAG sources API routes."""
+"""RAG 来源站点 HTTP API 路由。"""
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -18,18 +18,20 @@ router = APIRouter(
 
 
 def _service(db: Session = Depends(get_db)) -> SourceService:
+    """FastAPI 依赖：构造 SourceService。"""
     return SourceService(db)
 
 
 @router.get("")
 def list_sources(
-        kb_id: int,
-        keyword: str | None = Query(default=None),
-        region: str | None = Query(default=None),
-        category: str | None = Query(default=None),
-        status: str | None = Query(default=None),
-        service: SourceService = Depends(_service),
+    kb_id: int,
+    keyword: str | None = Query(default=None),
+    region: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    service: SourceService = Depends(_service),
 ) -> dict:
+    """列出知识库下的来源站点（支持筛选）。"""
     data = service.list_sources(
         kb_id,
         keyword=keyword,
@@ -42,57 +44,62 @@ def list_sources(
 
 @router.post("")
 def create_source(
-        kb_id: int,
-        payload: SourceSiteCreate,
-        service: SourceService = Depends(_service),
+    kb_id: int,
+    payload: SourceSiteCreate,
+    service: SourceService = Depends(_service),
 ) -> dict:
+    """在知识库下创建来源站点。"""
     data = service.create_source(kb_id, payload)
     return ok(data.model_dump(mode="json"))
 
 
 @router.post("/probe")
 def probe_sources(
-        kb_id: int,
-        payload: ProbeRequest | None = None,
-        service: SourceService = Depends(_service),
+    kb_id: int,
+    payload: ProbeRequest | None = None,
+    service: SourceService = Depends(_service),
 ) -> dict:
+    """批量探测站点入口 URL 可达性。"""
     data = service.probe(kb_id, payload or ProbeRequest())
     return ok(data.model_dump(mode="json"))
 
 
 @router.post("/{site_id}/sync")
 def sync_source(kb_id: int, site_id: str) -> dict:
-    """P1 placeholder — automated harvest/connector not implemented yet."""
+    """P1 占位 — 自动化采集/连接器尚未实现。"""
     _ = (kb_id, site_id)
     raise AppError("site sync is not implemented yet (P1)", code=501)
 
 
 @router.get("/{site_id}")
 def get_source(
-        kb_id: int,
-        site_id: str,
-        service: SourceService = Depends(_service),
+    kb_id: int,
+    site_id: str,
+    service: SourceService = Depends(_service),
 ) -> dict:
+    """获取单个来源站点详情。"""
     data = service.get_source(kb_id, site_id)
     return ok(data.model_dump(mode="json"))
 
 
 @router.patch("/{site_id}")
 def update_source(
-        kb_id: int,
-        site_id: str,
-        payload: SourceSiteUpdate,
-        service: SourceService = Depends(_service),
+    kb_id: int,
+    site_id: str,
+    payload: SourceSiteUpdate,
+    service: SourceService = Depends(_service),
 ) -> dict:
+    """更新指定来源站点。"""
     data = service.update_source(kb_id, site_id, payload)
     return ok(data.model_dump(mode="json"))
 
 
 @router.delete("/{site_id}")
 def delete_source(
-        kb_id: int,
-        site_id: str,
-        service: SourceService = Depends(_service),
+    kb_id: int,
+    site_id: str,
+    service: SourceService = Depends(_service),
 ) -> dict:
+    """删除指定来源站点。"""
     service.delete_source(kb_id, site_id)
     return ok({"site_id": site_id, "deleted": True})

@@ -1,4 +1,4 @@
-"""Application settings."""
+"""应用配置：从环境变量与 .env 加载运行时参数。"""
 
 from functools import lru_cache
 
@@ -6,6 +6,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """平台全局配置项。"""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -47,4 +49,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """获取单例配置对象（进程内缓存）。"""
     return Settings()

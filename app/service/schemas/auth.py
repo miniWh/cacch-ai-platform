@@ -1,4 +1,4 @@
-"""Auth / RBAC Pydantic schemas."""
+"""认证与 RBAC 相关 Pydantic 请求/响应模型。"""
 
 from datetime import datetime
 
@@ -6,17 +6,23 @@ from pydantic import BaseModel, Field, field_serializer
 
 
 class LoginRequest(BaseModel):
-    mobile: str = Field(min_length=1, max_length=32)
-    password: str = Field(min_length=1, max_length=128)
-    remember_today: bool = False
+    """登录请求体。"""
+
+    mobile: str = Field(min_length=1, max_length=32, description="手机号")
+    password: str = Field(min_length=1, max_length=128, description="密码")
+    remember_today: bool = Field(default=False, description="今日有效（至当日 23:59）")
 
 
 class ChangePasswordRequest(BaseModel):
-    old_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
+    """修改密码请求体。"""
+
+    old_password: str = Field(min_length=1, max_length=128, description="原密码")
+    new_password: str = Field(min_length=8, max_length=128, description="新密码")
 
 
 class AuthUserOut(BaseModel):
+    """当前用户基本信息与菜单权限。"""
+
     id: int
     staff_no: str
     mobile: str
@@ -27,6 +33,8 @@ class AuthUserOut(BaseModel):
 
 
 class LoginOut(BaseModel):
+    """登录成功响应。"""
+
     access_token: str
     expires_at: datetime
     must_change_password: bool
@@ -41,6 +49,8 @@ class LoginOut(BaseModel):
 
 
 class MenuOut(BaseModel):
+    """菜单项输出。"""
+
     id: str
     title: str
     path: str
@@ -52,19 +62,25 @@ class MenuOut(BaseModel):
 
 
 class MenuListOut(BaseModel):
+    """菜单列表响应。"""
+
     items: list[MenuOut]
 
 
 class OrgCreate(BaseModel):
-    parent_id: int | None = None
-    code: str | None = Field(default=None, max_length=64)
-    name: str = Field(min_length=1, max_length=128)
-    sort_order: int = 0
-    status: str = "active"
-    remark: str | None = Field(default=None, max_length=512)
+    """创建组织请求体。"""
+
+    parent_id: int | None = Field(default=None, description="父组织 ID")
+    code: str | None = Field(default=None, max_length=64, description="组织编码")
+    name: str = Field(min_length=1, max_length=128, description="组织名称")
+    sort_order: int = Field(default=0, description="排序")
+    status: str = Field(default="active", description="状态：active / disabled")
+    remark: str | None = Field(default=None, max_length=512, description="备注")
 
 
 class OrgUpdate(BaseModel):
+    """更新组织请求体（部分字段）。"""
+
     parent_id: int | None = None
     code: str | None = Field(default=None, max_length=64)
     name: str | None = Field(default=None, min_length=1, max_length=128)
@@ -74,6 +90,8 @@ class OrgUpdate(BaseModel):
 
 
 class OrgOut(BaseModel):
+    """组织详情输出。"""
+
     id: int
     parent_id: int | None
     code: str | None
@@ -86,17 +104,23 @@ class OrgOut(BaseModel):
 
 
 class OrgListOut(BaseModel):
+    """组织列表响应。"""
+
     items: list[OrgOut]
 
 
 class RoleCreate(BaseModel):
-    code: str = Field(min_length=1, max_length=64)
-    name: str = Field(min_length=1, max_length=64)
-    description: str | None = Field(default=None, max_length=256)
-    menu_ids: list[str] = Field(default_factory=list)
+    """创建角色请求体。"""
+
+    code: str = Field(min_length=1, max_length=64, description="角色编码")
+    name: str = Field(min_length=1, max_length=64, description="角色名称")
+    description: str | None = Field(default=None, max_length=256, description="描述")
+    menu_ids: list[str] = Field(default_factory=list, description="绑定的菜单 ID 列表")
 
 
 class RoleUpdate(BaseModel):
+    """更新角色请求体（部分字段）。"""
+
     name: str | None = Field(default=None, min_length=1, max_length=64)
     description: str | None = Field(default=None, max_length=256)
     status: str | None = None
@@ -104,6 +128,8 @@ class RoleUpdate(BaseModel):
 
 
 class RoleOut(BaseModel):
+    """角色详情输出。"""
+
     id: int
     code: str
     name: str
@@ -113,14 +139,20 @@ class RoleOut(BaseModel):
 
 
 class RoleListOut(BaseModel):
+    """角色列表响应。"""
+
     items: list[RoleOut]
 
 
 class HrPreviewRequest(BaseModel):
-    mobile: str = Field(min_length=1, max_length=32)
+    """HR 人员预览请求体。"""
+
+    mobile: str = Field(min_length=1, max_length=32, description="手机号")
 
 
 class HrPreviewOut(BaseModel):
+    """HR 人员预览响应。"""
+
     staff_no: str
     mobile: str
     name: str
@@ -129,16 +161,22 @@ class HrPreviewOut(BaseModel):
 
 
 class UserCreate(BaseModel):
-    mobile: str = Field(min_length=1, max_length=32)
-    org_id: int = Field(gt=0)
-    role_id: int | None = None
-    menu_ids: list[str] | None = None
-    password: str | None = Field(default=None, max_length=128)
-    generate_password: bool = False
-    remark: str | None = Field(default=None, max_length=512)
+    """创建用户（开户）请求体。"""
+
+    mobile: str = Field(min_length=1, max_length=32, description="HR 手机号")
+    org_id: int = Field(gt=0, description="挂靠组织 ID")
+    role_id: int | None = Field(
+        default=None, description="角色 ID（可选，用于继承菜单）"
+    )
+    menu_ids: list[str] | None = Field(default=None, description="直接分配的菜单 ID")
+    password: str | None = Field(default=None, max_length=128, description="初始密码")
+    generate_password: bool = Field(default=False, description="是否随机生成密码")
+    remark: str | None = Field(default=None, max_length=512, description="备注")
 
 
 class UserUpdate(BaseModel):
+    """更新用户请求体（部分字段）。"""
+
     org_id: int | None = Field(default=None, gt=0)
     role_id: int | None = None
     menu_ids: list[str] | None = None
@@ -147,11 +185,15 @@ class UserUpdate(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    password: str | None = Field(default=None, max_length=128)
-    generate_password: bool = True
+    """重置密码请求体。"""
+
+    password: str | None = Field(default=None, max_length=128, description="新密码")
+    generate_password: bool = Field(default=True, description="是否随机生成密码")
 
 
 class UserOut(BaseModel):
+    """用户详情输出。"""
+
     id: int
     staff_no: str
     mobile: str
@@ -176,20 +218,28 @@ class UserOut(BaseModel):
 
 
 class UserCreateOut(BaseModel):
+    """创建用户成功响应（含明文初始密码）。"""
+
     user: UserOut
     plain_password: str
 
 
 class ResetPasswordOut(BaseModel):
+    """重置密码成功响应（含明文新密码）。"""
+
     plain_password: str
 
 
 class UserListOut(BaseModel):
+    """用户列表响应。"""
+
     items: list[UserOut]
     total: int
 
 
 class BootstrapAdminRequest(BaseModel):
-    mobile: str = Field(min_length=1, max_length=32)
-    password: str = Field(min_length=8, max_length=128)
-    org_id: int | None = None
+    """首次引导创建管理员请求体（须服务令牌）。"""
+
+    mobile: str = Field(min_length=1, max_length=32, description="HR 手机号")
+    password: str = Field(min_length=8, max_length=128, description="初始密码")
+    org_id: int | None = Field(default=None, description="组织 ID，默认 ROOT")

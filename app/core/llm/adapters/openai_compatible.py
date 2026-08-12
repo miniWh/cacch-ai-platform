@@ -1,4 +1,4 @@
-"""OpenAI-compatible LLM adapter (阿里云百炼 / 通义千问等) via httpx."""
+"""OpenAI 兼容协议 LLM 适配器（阿里云百炼 / 通义千问等），基于 httpx 实现。"""
 
 from __future__ import annotations
 
@@ -53,6 +53,8 @@ def _raise_http(resp: httpx.Response) -> None:
 
 
 class OpenAICompatibleChatAdapter:
+    """OpenAI Chat Completions 兼容对话适配器。"""
+
     def chat(
         self,
         *,
@@ -60,6 +62,19 @@ class OpenAICompatibleChatAdapter:
         messages: list[ChatMessage],
         meta: CallMeta,
     ) -> ChatResult:
+        """发起非流式 chat/completions 请求。
+
+        Args:
+            profile: 模型连接与参数配置。
+            messages: 对话消息列表。
+            meta: 审计上下文（当前主要用于日志关联）。
+
+        Returns:
+            解析后的模型回复与 token 用量。
+
+        Raises:
+            LlmProviderError: HTTP 错误或响应格式异常。
+        """
         url = f"{profile.base_url}/chat/completions"
         payload: dict[str, Any] = {
             "model": profile.model,
@@ -103,6 +118,19 @@ class OpenAICompatibleChatAdapter:
         messages: list[ChatMessage],
         meta: CallMeta,
     ) -> Iterator[str]:
+        """发起 SSE 流式 chat/completions 请求。
+
+        Args:
+            profile: 模型连接与参数配置。
+            messages: 对话消息列表。
+            meta: 审计上下文，无效 SSE 块会记录 request_id。
+
+        Yields:
+            模型回复的文本增量片段。
+
+        Raises:
+            LlmProviderError: HTTP 错误或网络异常。
+        """
         url = f"{profile.base_url}/chat/completions"
         payload: dict[str, Any] = {
             "model": profile.model,
@@ -158,6 +186,8 @@ class OpenAICompatibleChatAdapter:
 
 
 class OpenAICompatibleEmbeddingAdapter:
+    """OpenAI Embeddings 兼容向量化适配器。"""
+
     def embed_batch(
         self,
         *,
@@ -165,6 +195,19 @@ class OpenAICompatibleEmbeddingAdapter:
         texts: list[str],
         meta: CallMeta,
     ) -> list[list[float]]:
+        """批量调用 embeddings 接口生成向量。
+
+        Args:
+            profile: 模型连接与维度等参数。
+            texts: 待编码文本列表；空列表直接返回 ``[]``。
+            meta: 审计上下文（预留，当前未直接使用）。
+
+        Returns:
+            与 ``texts`` 顺序一致的浮点向量列表。
+
+        Raises:
+            LlmProviderError: HTTP 错误、响应格式或维度不匹配。
+        """
         if not texts:
             return []
         url = f"{profile.base_url}/embeddings"

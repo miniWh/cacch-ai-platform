@@ -1,4 +1,4 @@
-"""Database naming and AI-table isolation rules."""
+"""数据库表命名规范与 AI 业务表隔离白名单。"""
 
 # Shared DB 中所有本平台物理表统一前缀，避免与其他业务表冲突。
 AI_TABLE_PREFIX = "cacch_ai_"
@@ -23,11 +23,26 @@ AI_PHYSICAL_TABLES: frozenset[str] = frozenset(
 
 
 def is_ai_table(table_name: str) -> bool:
+    """判断表名是否属于本平台 AI 表前缀范围。
+
+    Args:
+        table_name: 物理表名。
+
+    Returns:
+        以 ``AI_TABLE_PREFIX`` 开头时返回 ``True``。
+    """
     return table_name.startswith(AI_TABLE_PREFIX)
 
 
 def assert_only_ai_tables(table_names: list[str] | set[str] | frozenset[str]) -> None:
-    """Raise if metadata contains tables outside the AI allowlist."""
+    """断言给定表集合均在 AI 表白名单内，否则抛出 ``RuntimeError``。
+
+    Args:
+        table_names: 待检查的物理表名集合。
+
+    Raises:
+        RuntimeError: 存在非 AI 前缀表或未登记在白名单中的表。
+    """
     unexpected = sorted({n for n in table_names if not is_ai_table(n)})
     if unexpected:
         raise RuntimeError(

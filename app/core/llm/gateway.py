@@ -1,4 +1,4 @@
-"""LLM Gateway — profile routing, adapter dispatch, basic audit logging."""
+"""LLM 网关 — profile 路由、适配器分发与基础审计日志。"""
 
 from __future__ import annotations
 
@@ -22,7 +22,14 @@ _EMBED = OpenAICompatibleEmbeddingAdapter()
 
 
 class LlmGateway:
+    """统一入口：按 profile 选择模型提供商并完成调用与审计。"""
+
     def __init__(self, settings: Settings | None = None) -> None:
+        """初始化网关及已注册的 provider 适配器。
+
+        Args:
+            settings: 应用配置；省略时从全局 ``get_settings()`` 读取。
+        """
         self._settings = settings or get_settings()
         # 当前接入：阿里云百炼 OpenAI 兼容协议（provider=qwen）
         self._chat_adapters = {"qwen": _CHAT}
@@ -42,6 +49,16 @@ class LlmGateway:
         profile_id: str,
         meta: CallMeta | None = None,
     ) -> ChatResult:
+        """非流式对话；主 profile 失败时可按配置回退到备用 profile。
+
+        Args:
+            messages: 对话消息列表。
+            profile_id: 使用的 chat profile ID。
+            meta: 审计上下文；省略时使用默认值。
+
+        Returns:
+            模型完整回复及用量信息。
+        """
         meta = meta or CallMeta()
         profile = self._resolve(profile_id, kind="chat")
         return self._chat_with_fallback(messages, profile, meta)
@@ -52,6 +69,16 @@ class LlmGateway:
         profile_id: str,
         meta: CallMeta | None = None,
     ) -> Iterator[str]:
+        """流式对话，逐块返回文本增量。
+
+        Args:
+            messages: 对话消息列表。
+            profile_id: 使用的 chat profile ID。
+            meta: 审计上下文；省略时使用默认值。
+
+        Yields:
+            模型生成的文本片段。
+        """
         meta = meta or CallMeta()
         profile = self._resolve(profile_id, kind="chat")
         adapter = self._chat_adapters.get(profile.provider)
@@ -87,6 +114,16 @@ class LlmGateway:
         profile_id: str = "embed_default",
         meta: CallMeta | None = None,
     ) -> list[list[float]]:
+        """批量生成文本 embedding 向量。
+
+        Args:
+            texts: 待编码文本列表。
+            profile_id: embedding profile ID，默认 ``embed_default``。
+            meta: 审计上下文；省略时使用 embedding 能力标识。
+
+        Returns:
+            与输入等长的向量列表。
+        """
         meta = meta or CallMeta(capability="embedding")
         profile = self._resolve(profile_id, kind="embedding")
         adapter = self._embed_adapters.get(profile.provider)
