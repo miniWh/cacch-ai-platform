@@ -23,3 +23,8 @@ class ValidationAppError(AppError):
 class UnauthorizedError(AppError):
     def __init__(self, message: str = "unauthorized") -> None:
         super().__init__(message, code=401)
+
+
+class ForbiddenError(AppError):
+    def __init__(self, message: str = "forbidden") -> None:
+        super().__init__(message, code=403)

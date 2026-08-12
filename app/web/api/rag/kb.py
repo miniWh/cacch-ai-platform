@@ -7,12 +7,12 @@ from app.common.dto import ok
 from app.dao.database import get_db
 from app.service.kb_service import KnowledgeBaseService
 from app.service.schemas.kb import KnowledgeBaseCreate
-from app.web.middleware.auth import require_bearer
+from app.web.middleware.auth import require_business_user
 
 router = APIRouter(
     prefix="/api/v1/rag/kb",
     tags=["rag-kb"],
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_business_user)],
 )
 
 

@@ -6,9 +6,12 @@ import {
   Document,
   Fold,
   Expand,
+  Key,
   List,
   Menu as MenuIcon,
+  OfficeBuilding,
   Setting,
+  User,
 } from '@element-plus/icons-vue'
 import { useMenuStore, type MenuIconName } from '../stores/menu'
 
@@ -25,10 +28,15 @@ const iconMap: Record<MenuIconName, unknown> = {
   document: Document,
   setting: Setting,
   menu: MenuIcon,
+  office: OfficeBuilding,
+  key: Key,
+  user: User,
 }
 
 const active = computed(() => route.path)
-const menuKey = computed(() => visibleMenus.value.map((m) => `${m.id}:${m.title}:${m.sort}`).join('|'))
+const menuKey = computed(() =>
+  visibleMenus.value.map((m) => `${m.id}:${m.title}:${m.sort}`).join('|'),
+)
 
 function go(path: string) {
   router.push(path)

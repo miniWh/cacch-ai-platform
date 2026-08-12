@@ -8,12 +8,12 @@ from app.common.exceptions import AppError
 from app.dao.database import get_db
 from app.service.schemas.source import ProbeRequest, SourceSiteCreate, SourceSiteUpdate
 from app.service.source_service import SourceService
-from app.web.middleware.auth import require_bearer
+from app.web.middleware.auth import require_business_user
 
 router = APIRouter(
     prefix="/api/v1/rag/kb/{kb_id}/sources",
     tags=["rag-sources"],
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_business_user)],
 )
 
 

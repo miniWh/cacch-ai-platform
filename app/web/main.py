@@ -10,7 +10,9 @@ from fastapi.responses import JSONResponse
 from app.common.dto import fail
 from app.common.exceptions import AppError
 from app.dao.database import get_session_factory, init_db
+from app.service.auth_seed import ensure_auth_seed
 from app.service.kb_service import KnowledgeBaseService
+from app.web.api.auth import router as auth_router
 from app.web.api.core import router as core_router
 from app.web.api.rag import router as rag_router
 from app.web.config import get_settings
@@ -21,6 +23,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     init_db()
     session = get_session_factory()()
     try:
+        ensure_auth_seed(session)
         KnowledgeBaseService(session).ensure_default_kb()
     finally:
         session.close()
@@ -46,7 +49,10 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(AppError)
     async def _app_error_handler(_: Request, exc: AppError) -> JSONResponse:
-        status = 401 if exc.code == 401 else 200
+        if exc.code in (401, 403):
+            status = exc.code
+        else:
+            status = 200
         return JSONResponse(
             status_code=status,
             content=fail(exc.code, exc.message),
@@ -56,6 +62,7 @@ def create_app() -> FastAPI:
     def health() -> dict:
         return {"code": 0, "message": "ok", "data": {"status": "ok"}}
 
+    application.include_router(auth_router)
     application.include_router(rag_router)
     application.include_router(core_router)
     return application

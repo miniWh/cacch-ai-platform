@@ -14,6 +14,9 @@ class Settings(BaseSettings):
 
     app_name: str = "cacch-ai-platform"
     api_auth_token: str = "dev-token"
+    # HMAC secret for user access tokens; empty → fall back to api_auth_token
+    auth_token_secret: str = ""
+    auth_access_token_hours: int = 8
     database_url: str = "postgresql+psycopg://esb:esb@10.80.86.93:5432/cdb"
     probe_timeout_seconds: float = 8.0
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"

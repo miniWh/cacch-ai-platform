@@ -17,7 +17,7 @@ from app.core.llm.gateway import LlmGateway
 from app.core.llm.profiles import build_profiles
 from app.core.llm.types import CallMeta, ChatMessage
 from app.web.config import Settings, get_settings
-from app.web.middleware.auth import require_bearer
+from app.web.middleware.auth import require_business_user
 
 router = APIRouter(prefix="/llm", tags=["core-llm"])
 
@@ -74,7 +74,7 @@ def _to_messages(
     return messages
 
 
-@router.post("/chat", dependencies=[Depends(require_bearer)])
+@router.post("/chat", dependencies=[Depends(require_business_user)])
 def smoke_chat(
         payload: ChatSmokeRequest,
         gateway: LlmGateway = Depends(_gateway),
@@ -103,7 +103,7 @@ def smoke_chat(
     )
 
 
-@router.post("/chat/completions", dependencies=[Depends(require_bearer)])
+@router.post("/chat/completions", dependencies=[Depends(require_business_user)])
 def chat_completions(
         payload: ChatCompletionsRequest,
         gateway: LlmGateway = Depends(_gateway),
@@ -183,7 +183,7 @@ def chat_completions(
     )
 
 
-@router.post("/embed", dependencies=[Depends(require_bearer)])
+@router.post("/embed", dependencies=[Depends(require_business_user)])
 def smoke_embed(
         payload: EmbedSmokeRequest,
         gateway: LlmGateway = Depends(_gateway),
@@ -202,7 +202,7 @@ def smoke_embed(
     )
 
 
-@router.get("/profiles", dependencies=[Depends(require_bearer)])
+@router.get("/profiles", dependencies=[Depends(require_business_user)])
 def list_profiles(
         settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:

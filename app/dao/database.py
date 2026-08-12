@@ -8,10 +8,18 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.common.db_naming import AI_TABLE_PREFIX, assert_only_ai_tables
 from app.dao.models import (  # noqa: F401 — register metadata
+    AuditLog,
+    AuthSession,
     ChatMessage,
     ChatSession,
     KnowledgeBase,
+    Menu,
+    Org,
+    Role,
+    RoleMenu,
     SourceSite,
+    UserAccount,
+    UserMenu,
 )
 from app.dao.models.base import Base
 from app.web.config import get_settings

@@ -1,17 +1,64 @@
-"""Auth dependency — MVP Bearer token."""
+"""Auth dependency — user access token or service API_AUTH_TOKEN."""
 
-from fastapi import Depends, Header
+from dataclasses import dataclass
+
+from fastapi import Depends, Header, Request
+from sqlalchemy.orm import Session
 
 from app.common.exceptions import UnauthorizedError
+from app.dao.database import get_db
+from app.service.auth_service import AuthService, CurrentUser
 from app.web.config import Settings, get_settings
 
 
-def require_bearer(
-    authorization: str | None = Header(default=None),
+def get_auth_service(
+    db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> None:
+) -> AuthService:
+    return AuthService(db, settings)
+
+
+def require_user(
+    authorization: str | None = Header(default=None),
+    service: AuthService = Depends(get_auth_service),
+) -> CurrentUser:
     if not authorization or not authorization.startswith("Bearer "):
         raise UnauthorizedError("missing bearer token")
     token = authorization.removeprefix("Bearer ").strip()
-    if token != settings.api_auth_token:
-        raise UnauthorizedError("invalid token")
+    if not token:
+        raise UnauthorizedError("missing bearer token")
+    return service.resolve_bearer(token)
+
+
+def require_bearer(
+    user: CurrentUser = Depends(require_user),
+) -> CurrentUser:
+    """Backward-compatible dependency name used by RAG routers."""
+    return user
+
+
+def require_business_user(
+    user: CurrentUser = Depends(require_user),
+) -> CurrentUser:
+    user.require_business_access()
+    return user
+
+
+def client_meta(request: Request) -> tuple[str | None, str | None]:
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+    return ip, ua
+
+
+@dataclass
+class ServiceGate:
+    """Require service token only (bootstrap)."""
+
+    settings: Settings
+
+    def __call__(self, authorization: str | None = Header(default=None)) -> None:
+        if not authorization or not authorization.startswith("Bearer "):
+            raise UnauthorizedError("missing bearer token")
+        token = authorization.removeprefix("Bearer ").strip()
+        if token != self.settings.api_auth_token:
+            raise UnauthorizedError("service token required")

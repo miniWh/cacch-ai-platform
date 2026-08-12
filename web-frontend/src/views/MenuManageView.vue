@@ -1,77 +1,56 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Bottom, Top } from '@element-plus/icons-vue'
-import { useMenuStore } from '../stores/menu'
+import { Refresh } from '@element-plus/icons-vue'
+import { ApiError } from '../api/http'
+import { useAuthStore } from '../stores/auth'
 
-const { allMenus, setVisible, rename, move, resetMenus } = useMenuStore()
-const editingId = ref('')
-const editingTitle = ref('')
+const auth = useAuthStore()
+const loading = ref(false)
 
-function startEdit(id: string, title: string) {
-  editingId.value = id
-  editingTitle.value = title
+function errMsg(e: unknown): string {
+  if (e instanceof ApiError) return e.message
+  if (e instanceof Error) return e.message
+  return '加载失败'
 }
 
-function commitEdit(id: string) {
-  rename(id, editingTitle.value)
-  editingId.value = ''
-  ElMessage.success('菜单名称已更新')
+async function loadData() {
+  loading.value = true
+  try {
+    await auth.loadMenuCatalog()
+  } catch (e) {
+    ElMessage.error(errMsg(e))
+  } finally {
+    loading.value = false
+  }
 }
 
-function onVisibleChange(id: string, value: string | number | boolean) {
-  setVisible(id, Boolean(value))
-  ElMessage.success(value ? '已显示到侧栏' : '已从侧栏隐藏')
-}
-
-function onReset() {
-  resetMenus()
-  ElMessage.success('已恢复默认菜单')
-}
+onMounted(loadData)
 </script>
 
 <template>
   <div class="page">
     <div class="page-head">
       <h1>菜单管理</h1>
-      <p>动态配置左侧导航：显示/隐藏、排序、重命名（保存在浏览器本地，Mock 阶段）</p>
+      <p>系统菜单由服务端维护，此处为只读列表（侧栏根据当前用户 menu_ids 过滤显示）</p>
     </div>
 
     <div class="panel">
       <div class="toolbar">
-        <el-button @click="onReset">恢复默认</el-button>
+        <el-button :icon="Refresh" @click="loadData">刷新</el-button>
       </div>
 
-      <el-table :data="allMenus" stripe>
-        <el-table-column label="排序" width="120">
-          <template #default="{ row }">
-            <el-button :icon="Top" circle size="small" @click="move(row.id, 'up')" />
-            <el-button :icon="Bottom" circle size="small" @click="move(row.id, 'down')" />
-          </template>
-        </el-table-column>
+      <el-table v-loading="loading" :data="auth.menuCatalog.value" stripe>
         <el-table-column prop="id" label="标识" width="120" />
-        <el-table-column label="菜单名称" min-width="200">
-          <template #default="{ row }">
-            <div v-if="editingId === row.id" class="edit-row">
-              <el-input v-model="editingTitle" size="small" @keyup.enter="commitEdit(row.id)" />
-              <el-button size="small" type="primary" @click="commitEdit(row.id)">确定</el-button>
-              <el-button size="small" @click="editingId = ''">取消</el-button>
-            </div>
-            <div v-else class="name-row">
-              <span>{{ row.title }}</span>
-              <el-button link type="primary" @click="startEdit(row.id, row.title)">重命名</el-button>
-            </div>
-          </template>
-        </el-table-column>
+        <el-table-column prop="title" label="菜单名称" min-width="160" />
         <el-table-column prop="path" label="路由" min-width="140" />
-        <el-table-column label="侧栏显示" width="120">
+        <el-table-column prop="icon" label="图标" width="100" />
+        <el-table-column prop="sort_order" label="排序" width="80" />
+        <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-switch
-              :model-value="row.visible"
-              :disabled="row.locked"
-              @change="(v: boolean) => onVisibleChange(row.id, v)"
-            />
-            <span v-if="row.locked" class="tip">锁定</span>
+            <el-tag :type="row.status === 'active' ? 'success' : 'info'">
+              {{ row.status === 'active' ? '启用' : '停用' }}
+            </el-tag>
           </template>
         </el-table-column>
       </el-table>
@@ -107,18 +86,5 @@ function onReset() {
 
 .toolbar {
   margin-bottom: 12px;
-}
-
-.name-row,
-.edit-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tip {
-  margin-left: 6px;
-  font-size: 12px;
-  color: var(--cacch-text-secondary);
 }
 </style>

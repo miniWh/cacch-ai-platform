@@ -11,12 +11,12 @@ from app.service.schemas.chat_session import (
     ChatSessionCreate,
     ChatSessionUpdate,
 )
-from app.web.middleware.auth import require_bearer
+from app.web.middleware.auth import require_business_user
 
 router = APIRouter(
     prefix="/api/v1/rag/sessions",
     tags=["rag-sessions"],
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_business_user)],
 )
 
 

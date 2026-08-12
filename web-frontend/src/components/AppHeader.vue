@@ -1,5 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { UserFilled } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import { useAuthStore } from '../stores/auth'
+
+const router = useRouter()
+const auth = useAuthStore()
+
+const displayName = computed(() => auth.user.value?.name || '用户')
+
+async function onLogout() {
+  try {
+    await ElMessageBox.confirm('确定退出登录？', '退出', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await auth.logout()
+    await router.replace('/login')
+  } catch {
+    /* cancelled */
+  }
+}
 </script>
 
 <template>
@@ -17,7 +40,8 @@ import { UserFilled } from '@element-plus/icons-vue'
         <el-avatar :size="32" class="avatar">
           <el-icon><UserFilled /></el-icon>
         </el-avatar>
-        <span class="uname">张三</span>
+        <span class="uname">{{ displayName }}</span>
+        <el-button link type="primary" class="logout" @click="onLogout">退出</el-button>
       </div>
     </div>
   </header>
@@ -93,5 +117,9 @@ import { UserFilled } from '@element-plus/icons-vue'
 
 .uname {
   font-size: 14px;
+}
+
+.logout {
+  margin-left: 4px;
 }
 </style>
