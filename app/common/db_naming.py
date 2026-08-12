@@ -10,6 +10,14 @@ AI_PHYSICAL_TABLES: frozenset[str] = frozenset(
         f"{AI_TABLE_PREFIX}source_site",
         f"{AI_TABLE_PREFIX}chat_session",
         f"{AI_TABLE_PREFIX}chat_message",
+        f"{AI_TABLE_PREFIX}org",
+        f"{AI_TABLE_PREFIX}menu",
+        f"{AI_TABLE_PREFIX}role",
+        f"{AI_TABLE_PREFIX}role_menu",
+        f"{AI_TABLE_PREFIX}user",
+        f"{AI_TABLE_PREFIX}user_menu",
+        f"{AI_TABLE_PREFIX}auth_session",
+        f"{AI_TABLE_PREFIX}audit_log",
     }
 )
 

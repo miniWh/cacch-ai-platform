@@ -4,42 +4,68 @@
 -- 禁止对共享库中其他业务表进行增删改（及 DDL）
 -- =============================================================================
 -- 使用前请替换：
---   :app_role  → 应用连接角色（当前示例为 esb，建议后续改为独立角色 cacch_ai_app）
+--   app_role  → 应用连接角色（当前示例为 esb，建议后续改为独立角色 cacch_ai_app）
 -- =============================================================================
 
 BEGIN;
 
--- 建议：为 AI 平台单独建角色（若已存在可跳过）
--- CREATE ROLE cacch_ai_app LOGIN PASSWORD '***';
-
--- 以下以当前 .env 中的 esb 为例；生产建议改用专用角色并收回 esb 上多余权限
 DO $$
 DECLARE
     app_role NAME := 'esb';
+    t TEXT;
 BEGIN
-    -- 取消该角色在 public 下的建表权限（防止 create_all / 手工 DDL 污染其他命名）
     EXECUTE format('REVOKE CREATE ON SCHEMA public FROM %I', app_role);
-
-    -- 仅授予 AI 表 DML + 必要 USAGE
     EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', app_role);
 
-    EXECUTE format(
-        'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE cacch_ai_knowledge_base TO %I',
-        app_role
-    );
-    EXECUTE format(
-        'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE cacch_ai_source_site TO %I',
-        app_role
-    );
+    FOREACH t IN ARRAY ARRAY[
+        'cacch_ai_knowledge_base',
+        'cacch_ai_source_site',
+        'cacch_ai_chat_session',
+        'cacch_ai_chat_message',
+        'cacch_ai_org',
+        'cacch_ai_menu',
+        'cacch_ai_role',
+        'cacch_ai_role_menu',
+        'cacch_ai_user',
+        'cacch_ai_user_menu',
+        'cacch_ai_auth_session',
+        'cacch_ai_audit_log'
+    ]
+    LOOP
+        EXECUTE format(
+            'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE %I TO %I',
+            t,
+            app_role
+        );
+    END LOOP;
 
-    -- 序列（BIGSERIAL）
-    EXECUTE format(
-        'GRANT USAGE, SELECT ON SEQUENCE cacch_ai_knowledge_base_id_seq TO %I',
-        app_role
-    );
+    -- BIGSERIAL 序列
+    FOREACH t IN ARRAY ARRAY[
+        'cacch_ai_knowledge_base_id_seq',
+        'cacch_ai_org_id_seq',
+        'cacch_ai_role_id_seq',
+        'cacch_ai_user_id_seq',
+        'cacch_ai_auth_session_id_seq',
+        'cacch_ai_audit_log_id_seq'
+    ]
+    LOOP
+        BEGIN
+            EXECUTE format('GRANT USAGE, SELECT ON SEQUENCE %I TO %I', t, app_role);
+        EXCEPTION
+            WHEN undefined_table THEN
+                RAISE NOTICE 'sequence % not found, skip', t;
+        END;
+    END LOOP;
 
-    -- 明确：不对其他表做 GRANT。若 esb 历史上拥有 ALL ON ALL TABLES，请 DBA 另行 REVOKE。
-    RAISE NOTICE 'Granted DML on cacch_ai_* tables to role %', app_role;
+    -- HR 主数据只读（开户/登录校验）；表名按实际库为准
+    BEGIN
+        EXECUTE format('GRANT SELECT ON TABLE persondetail TO %I', app_role);
+    EXCEPTION
+        WHEN undefined_table THEN
+            RAISE NOTICE 'persondetail not found — grant SELECT manually when available';
+    END;
+
+    RAISE NOTICE 'Granted DML on cacch_ai_* (and SELECT persondetail if present) to role %', app_role;
 END $$;
 
 COMMIT;
@@ -47,5 +73,5 @@ COMMIT;
 -- ---------------------------------------------------------------------------
 -- DBA 可选加固（按需手工执行，避免误伤其他业务）：
 -- REVOKE ALL ON ALL TABLES IN SCHEMA public FROM esb;
--- 然后再执行本脚本中的 GRANT，仅恢复 cacch_ai_*。
+-- 然后再执行本脚本中的 GRANT，仅恢复 cacch_ai_* + persondetail SELECT。
 -- ---------------------------------------------------------------------------
