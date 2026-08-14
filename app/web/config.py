@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Open EFSA Questions API：每页条数、最多拉取页数
     crawl_open_efsa_page_size: int = 20
     crawl_open_efsa_max_pages: int = 5
+    # 是否拉取详情页（question/get + timeline + 附件元数据）
+    crawl_open_efsa_fetch_details: bool = True
+    # 单次同步最多拉取详情条数（建议 ≤ 列表条数）
+    crawl_open_efsa_max_details: int = 20
+    # 是否下载详情中的 Supporting Documents（PDF 等）
+    crawl_open_efsa_download_files: bool = True
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     default_kb_name: str = "默认知识库"
     default_kb_embedding_model: str = "text-embedding-v4"

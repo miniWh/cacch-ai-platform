@@ -277,15 +277,13 @@ def sync_crawl_site(site: SourceSite, settings: Settings) -> SyncCrawlManifest:
         write_manifest(run_dir, manifest)
         return manifest
 
-    # Open EFSA：HTML 为 SPA 空壳，改走 JSON API
+    # Open EFSA：HTML 为 SPA 空壳，改走 JSON API（列表+详情+附件）
     if matches_open_efsa_questions(site.entry_url):
         result = sync_open_efsa_questions(run_dir=run_dir, settings=settings)
         manifest.pages.extend(result.pages)
+        manifest.files.extend(result.files)
         manifest.ok = result.ok
-        manifest.error = result.error
-        if result.ok:
-            # 备注写入 notes 不合适；error 留空，页数在 pages 中
-            manifest.error = None
+        manifest.error = None if result.ok else result.error
         manifest.finished_at = now_app_iso()
         write_manifest(run_dir, manifest)
         return manifest
