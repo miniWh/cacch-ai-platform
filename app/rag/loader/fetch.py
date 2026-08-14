@@ -148,9 +148,9 @@ def fetch_site_page(site: SourceSite, settings: Settings) -> FetchResult:
     max_bytes = settings.fetch_max_bytes
     try:
         with httpx.Client(
-                timeout=timeout,
-                follow_redirects=True,
-                headers={"User-Agent": settings.fetch_user_agent},
+            timeout=timeout,
+            follow_redirects=True,
+            headers={"User-Agent": settings.fetch_user_agent},
         ) as client:
             response = client.get(site.entry_url)
             raw = response.content[:max_bytes]
@@ -173,7 +173,7 @@ def fetch_site_page(site: SourceSite, settings: Settings) -> FetchResult:
             content_type = (response.headers.get("content-type") or "").lower()
             text_body = raw.decode(response.encoding or "utf-8", errors="replace")
             if "html" in content_type or text_body.lstrip().lower().startswith(
-                    ("<!doctype", "<html")
+                ("<!doctype", "<html")
             ):
                 title, text = extract_html_text(text_body)
             else:

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     crawl_max_list_pages: int = 20
     # 单次同步最多下载附件数
     crawl_max_attachments: int = 50
+    # Open EFSA Questions API：每页条数、最多拉取页数
+    crawl_open_efsa_page_size: int = 20
+    crawl_open_efsa_max_pages: int = 5
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     default_kb_name: str = "默认知识库"
     default_kb_embedding_model: str = "text-embedding-v4"

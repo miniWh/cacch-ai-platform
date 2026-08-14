@@ -10,6 +10,10 @@ import httpx
 
 from app.common.timeutil import now_app
 from app.dao.models.source_site import SourceSite
+from app.rag.loader.connectors.open_efsa_questions import (
+    matches_open_efsa_questions,
+    sync_open_efsa_questions,
+)
 from app.rag.loader.fetch import extract_html_text
 from app.rag.loader.links import extract_links, is_attachment_url
 from app.rag.loader.persist import (
@@ -46,11 +50,11 @@ def _client(settings: Settings) -> httpx.Client:
 
 
 def _get(
-        client: httpx.Client,
-        url: str,
-        *,
-        domains: list[str],
-        max_bytes: int,
+    client: httpx.Client,
+    url: str,
+    *,
+    domains: list[str],
+    max_bytes: int,
 ) -> tuple[httpx.Response | None, bytes, str | None]:
     """GET 并校验跳转域名；返回 (response, body, error)。"""
     try:
@@ -66,14 +70,31 @@ def _get(
     return response, body, None
 
 
+def _looks_like_spa_shell(html: str, text: str) -> bool:
+    """粗判：可见文本极少且像前端壳（Angular/React 入口）。"""
+    if len(text.strip()) >= 200:
+        return False
+    lower = html.lower()
+    markers = (
+        "runtime.",
+        'id="root"',
+        "id='root'",
+        "<app-",
+        "ng-version",
+        "webpackchunk",
+        "main.",
+    )
+    return any(m in lower for m in markers)
+
+
 def _save_page(
-        *,
-        run_dir: Path,
-        index: int,
-        url: str,
-        response: httpx.Response | None,
-        body: bytes,
-        error: str | None,
+    *,
+    run_dir: Path,
+    index: int,
+    url: str,
+    response: httpx.Response | None,
+    body: bytes,
+    error: str | None,
 ) -> SavedPage:
     """将页面 HTML/正文写入 pages/。"""
     if error or response is None:
@@ -116,7 +137,20 @@ def _save_page(
     write_text(text_path, text)
     rel_text = str(text_path.relative_to(run_dir)).replace("\\", "/")
 
-    ok = 200 <= response.status_code < 400 and bool(text or body)
+    status_ok = 200 <= response.status_code < 400
+    if status_ok and is_html and _looks_like_spa_shell(text_body, text):
+        return SavedPage(
+            url=str(response.url),
+            html_path=rel_html,
+            text_path=rel_text,
+            title=title,
+            text_length=len(text),
+            status_code=response.status_code,
+            ok=False,
+            error="spa_shell_empty",
+        )
+
+    ok = status_ok and bool(text or body)
     return SavedPage(
         url=str(response.url),
         html_path=rel_html,
@@ -130,13 +164,13 @@ def _save_page(
 
 
 def _save_attachment(
-        *,
-        run_dir: Path,
-        client: httpx.Client,
-        url: str,
-        domains: list[str],
-        max_bytes: int,
-        delay_seconds: float,
+    *,
+    run_dir: Path,
+    client: httpx.Client,
+    url: str,
+    domains: list[str],
+    max_bytes: int,
+    delay_seconds: float,
 ) -> SavedFile:
     """下载附件到 files/。"""
     if delay_seconds > 0:
@@ -197,7 +231,9 @@ def sync_crawl_site(site: SourceSite, settings: Settings) -> SyncCrawlManifest:
     """
     同步抓取单个站点并落盘。
 
-    - ``manual`` / ``connector``：跳过（需人工或专用适配器）
+    - ``manual``：跳过
+    - Open EFSA Questions：走专用 API 连接器（SPA，HTML 无正文）
+    - 其它 ``connector``：无适配器则跳过
     - ``single_page``：入口页 + 页内附件
     - ``list_harvest``：入口页 + 同域列表页（有上限）+ 各页附件
     - 仅写本地目录，不写 document / 向量库
@@ -220,9 +256,9 @@ def sync_crawl_site(site: SourceSite, settings: Settings) -> SyncCrawlManifest:
     )
 
     mode = (site.crawl_mode or "").strip()
-    if mode in {"manual", "connector"}:
+    if mode == "manual":
         manifest.skipped = True
-        manifest.error = f"crawl_mode={mode} 本期不自动抓取"
+        manifest.error = "crawl_mode=manual 本期不自动抓取"
         manifest.finished_at = now_app_iso()
         write_manifest(run_dir, manifest)
         return manifest
@@ -237,6 +273,26 @@ def sync_crawl_site(site: SourceSite, settings: Settings) -> SyncCrawlManifest:
     domains = [str(d) for d in (site.allowed_domains or [])]
     if not _host_ok(site.entry_url, domains):
         manifest.error = "domain_denied"
+        manifest.finished_at = now_app_iso()
+        write_manifest(run_dir, manifest)
+        return manifest
+
+    # Open EFSA：HTML 为 SPA 空壳，改走 JSON API
+    if matches_open_efsa_questions(site.entry_url):
+        result = sync_open_efsa_questions(run_dir=run_dir, settings=settings)
+        manifest.pages.extend(result.pages)
+        manifest.ok = result.ok
+        manifest.error = result.error
+        if result.ok:
+            # 备注写入 notes 不合适；error 留空，页数在 pages 中
+            manifest.error = None
+        manifest.finished_at = now_app_iso()
+        write_manifest(run_dir, manifest)
+        return manifest
+
+    if mode == "connector":
+        manifest.skipped = True
+        manifest.error = "crawl_mode=connector 无匹配的站点适配器"
         manifest.finished_at = now_app_iso()
         write_manifest(run_dir, manifest)
         return manifest
@@ -276,9 +332,9 @@ def sync_crawl_site(site: SourceSite, settings: Settings) -> SyncCrawlManifest:
             if mode == "list_harvest":
                 for pu in page_links:
                     if (
-                            pu not in seen_pages
-                            and _host_ok(pu, domains)
-                            and not is_attachment_url(pu)
+                        pu not in seen_pages
+                        and _host_ok(pu, domains)
+                        and not is_attachment_url(pu)
                     ):
                         list_candidates.append(pu)
 
