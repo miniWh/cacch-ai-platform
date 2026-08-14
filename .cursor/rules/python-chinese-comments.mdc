@@ -1,0 +1,31 @@
+---
+description: 后端 app 代码须补充中文注释说明
+globs: "app/**/*.py"
+alwaysApply: false
+---
+
+# 后端中文注释
+
+修改或新增 `app/` 下 Python 代码时：
+
+1. **模块顶部**：中文 docstring，说明包/文件职责。
+2. **公开类、公开函数/方法**：中文 docstring（做什么、关键参数/返回值；必要时写 Raises）。
+3. **ORM 重要字段、复杂分支**：简短中文注释即可。
+4. **禁止**：对显而易见的一行代码堆砌无信息量注释；注释与代码不一致。
+5. 标识符、API 字段名保持英文；注释与说明用中文。
+
+```python
+# ❌ BAD — 无模块说明、无方法说明
+def fetch_kb_sites(self, kb_id: int) -> list[FetchResult]:
+    ...
+
+# ✅ GOOD
+"""按站点清单批量抓取（结果可打印控制台，不落库）。"""
+
+class SiteFetchService:
+    """读取站点清单并抓取入口页。"""
+
+    def fetch_kb_sites(self, kb_id: int) -> list[FetchResult]:
+        """抓取指定知识库下的站点并返回结果列表。"""
+        ...
+```

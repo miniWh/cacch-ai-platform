@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     auth_access_token_hours: int = 8
     database_url: str = "postgresql+psycopg://esb:esb@10.80.86.93:5432/cdb"
     probe_timeout_seconds: float = 8.0
+    # 站点抓取（暂不落库，仅预览）
+    fetch_timeout_seconds: float = 20.0
+    fetch_max_bytes: int = 2_000_000
+    fetch_user_agent: str = (
+        "CACCH-AI-Platform/0.1 (+internal; site-fetch; contact=ops)"
+    )
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     default_kb_name: str = "默认知识库"
     default_kb_embedding_model: str = "text-embedding-v4"

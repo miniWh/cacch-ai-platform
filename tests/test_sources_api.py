@@ -145,7 +145,7 @@ def test_probe_updates_status(client: TestClient) -> None:
     assert result["status"] == "active"
 
 
-def test_sync_placeholder(client: TestClient) -> None:
+def test_sync_fetch_preview(client: TestClient) -> None:
     client.post(
         "/api/v1/rag/kb/1/sources",
         headers=AUTH,
@@ -159,6 +159,20 @@ def test_sync_placeholder(client: TestClient) -> None:
             "allowed_domains": ["example.com"],
         },
     )
-    resp = client.post("/api/v1/rag/kb/1/sources/eu_efsa/sync", headers=AUTH)
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.url = "https://example.com/efsa"
+    mock_resp.headers = {"content-type": "text/html"}
+    mock_resp.encoding = "utf-8"
+    mock_resp.content = b"<html><body>efsa body</body></html>"
+
+    with patch("app.rag.loader.fetch.httpx.Client") as client_cls:
+        instance = client_cls.return_value.__enter__.return_value
+        instance.get.return_value = mock_resp
+        resp = client.post("/api/v1/rag/kb/1/sources/eu_efsa/sync", headers=AUTH)
+
     assert resp.status_code == 200
-    assert resp.json()["code"] == 501
+    body = resp.json()
+    assert body["code"] == 0
+    assert body["data"]["persisted"] is False
+    assert body["data"]["items"][0]["ok"] is True

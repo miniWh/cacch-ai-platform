@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.common.dto import ok
-from app.common.exceptions import AppError
 from app.dao.database import get_db
 from app.service.schemas.source import ProbeRequest, SourceSiteCreate, SourceSiteUpdate
+from app.service.site_fetch_service import SiteFetchService
 from app.service.source_service import SourceService
 from app.web.middleware.auth import require_business_user
 
@@ -20,6 +20,11 @@ router = APIRouter(
 def _service(db: Session = Depends(get_db)) -> SourceService:
     """FastAPI 依赖：构造 SourceService。"""
     return SourceService(db)
+
+
+def _fetch_service(db: Session = Depends(get_db)) -> SiteFetchService:
+    """FastAPI 依赖：构造 SiteFetchService。"""
+    return SiteFetchService(db)
 
 
 @router.get("")
@@ -64,11 +69,54 @@ def probe_sources(
     return ok(data.model_dump(mode="json"))
 
 
+@router.post("/fetch")
+def fetch_sources(
+    kb_id: int,
+    site_id: str | None = Query(default=None, description="仅抓取指定站点"),
+    status: str | None = Query(default="active", description="状态过滤；空=不过滤"),
+    service: SiteFetchService = Depends(_fetch_service),
+) -> dict:
+    """按站点清单抓取入口页，结果打印服务端控制台，响应返回摘要（不落库）。"""
+    results = service.fetch_kb_sites(
+        kb_id,
+        site_id=site_id,
+        status=status if status else None,
+        print_console=True,
+    )
+    items = service.results_as_dicts(results)
+    return ok(
+        {
+            "total": len(items),
+            "ok": sum(1 for r in results if r.ok),
+            "skipped": sum(1 for r in results if r.skipped),
+            "failed": sum(1 for r in results if not r.ok and not r.skipped),
+            "items": items,
+            "persisted": False,
+        }
+    )
+
+
 @router.post("/{site_id}/sync")
-def sync_source(kb_id: int, site_id: str) -> dict:
-    """P1 占位 — 自动化采集/连接器尚未实现。"""
-    _ = (kb_id, site_id)
-    raise AppError("site sync is not implemented yet (P1)", code=501)
+def sync_source(
+    kb_id: int,
+    site_id: str,
+    service: SiteFetchService = Depends(_fetch_service),
+) -> dict:
+    """触发单站抓取预览（等同 fetch；本期不落库，正文打印到控制台）。"""
+    results = service.fetch_kb_sites(
+        kb_id,
+        site_id=site_id,
+        status=None,
+        print_console=True,
+    )
+    items = service.results_as_dicts(results)
+    return ok(
+        {
+            "site_id": site_id,
+            "persisted": False,
+            "items": items,
+        }
+    )
 
 
 @router.get("/{site_id}")
