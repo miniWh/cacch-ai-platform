@@ -21,12 +21,16 @@ class Settings(BaseSettings):
     auth_access_token_hours: int = 8
     database_url: str = "postgresql+psycopg://esb:esb@10.80.86.93:5432/cdb"
     probe_timeout_seconds: float = 8.0
-    # 站点抓取（暂不落库，仅预览）
+    # 站点抓取（sync 落盘；不写业务库 / 向量库）
     fetch_timeout_seconds: float = 20.0
     fetch_max_bytes: int = 2_000_000
-    fetch_user_agent: str = (
-        "CACCH-AI-Platform/0.1 (+internal; site-fetch; contact=ops)"
-    )
+    fetch_user_agent: str = "CACCH-AI-Platform/0.1 (+internal; site-fetch; contact=ops)"
+    # 落盘根目录（相对仓库或绝对路径）；结构 kb_{id}/{site_id}/{run_id}/
+    crawl_storage_dir: str = "data/crawl"
+    # list_harvest 最多跟进的同域列表页数（不含入口页）
+    crawl_max_list_pages: int = 20
+    # 单次同步最多下载附件数
+    crawl_max_attachments: int = 50
     cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
     default_kb_name: str = "默认知识库"
     default_kb_embedding_model: str = "text-embedding-v4"

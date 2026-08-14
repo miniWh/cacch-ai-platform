@@ -1,6 +1,7 @@
 """API tests for sources CRUD + probe."""
 
 from collections.abc import Generator
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,6 +22,7 @@ def client(
     db_path = tmp_path / "test.db"
     monkeypatch.setenv("API_AUTH_TOKEN", "test-token")
     monkeypatch.setenv("DATABASE_URL", f"sqlite+pysqlite:///{db_path}")
+    monkeypatch.setenv("CRAWL_STORAGE_DIR", str(tmp_path / "crawl"))
     get_settings.cache_clear()
     reset_engine()
     init_db()
@@ -166,7 +168,7 @@ def test_sync_fetch_preview(client: TestClient) -> None:
     mock_resp.encoding = "utf-8"
     mock_resp.content = b"<html><body>efsa body</body></html>"
 
-    with patch("app.rag.loader.fetch.httpx.Client") as client_cls:
+    with patch("app.rag.loader.sync_crawl.httpx.Client") as client_cls:
         instance = client_cls.return_value.__enter__.return_value
         instance.get.return_value = mock_resp
         resp = client.post("/api/v1/rag/kb/1/sources/eu_efsa/sync", headers=AUTH)
@@ -174,5 +176,48 @@ def test_sync_fetch_preview(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["code"] == 0
-    assert body["data"]["persisted"] is False
-    assert body["data"]["items"][0]["ok"] is True
+    assert body["data"]["saved_to_disk"] is True
+    assert body["data"]["persisted_db"] is False
+    assert body["data"]["item"]["ok"] is True
+    assert body["data"]["item"]["storage_dir"]
+    assert Path(body["data"]["item"]["storage_dir"]).is_dir()
+
+
+def test_sync_batch_endpoint(client: TestClient, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("CRAWL_STORAGE_DIR", str(tmp_path / "crawl_batch"))
+    get_settings.cache_clear()
+
+    client.post(
+        "/api/v1/rag/kb/1/sources",
+        headers=AUTH,
+        json={
+            "site_id": "batch_a",
+            "name": "Batch A",
+            "region": "INT",
+            "category": "database",
+            "entry_url": "https://example.com/a",
+            "crawl_mode": "single_page",
+            "allowed_domains": ["example.com"],
+        },
+    )
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.url = "https://example.com/a"
+    mock_resp.headers = {"content-type": "text/html"}
+    mock_resp.encoding = "utf-8"
+    mock_resp.content = b"<html><body>batch</body></html>"
+
+    with patch("app.rag.loader.sync_crawl.httpx.Client") as client_cls:
+        instance = client_cls.return_value.__enter__.return_value
+        instance.get.return_value = mock_resp
+        resp = client.post(
+            "/api/v1/rag/kb/1/sources/sync",
+            headers=AUTH,
+            params={"site_id": "batch_a"},
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["total"] == 1
+    assert data["saved_to_disk"] is True
+    assert data["items"][0]["site_id"] == "batch_a"
