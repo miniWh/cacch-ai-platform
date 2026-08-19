@@ -1,0 +1,20 @@
+[Unit]
+Description=CACCH AI Platform Backend (FastAPI)
+Documentation=https://github.com/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aidoc
+Group=aidoc
+WorkingDirectory=/home/aidoc/cacch-ai-platform
+EnvironmentFile=/home/aidoc/cacch-ai-platform/.env
+ExecStart=/home/aidoc/cacch-ai-platform/.venv/bin/gunicorn app.web.main:app -c /home/aidoc/cacch-ai-platform/deploy/config/gunicorn.conf.py
+Restart=always
+RestartSec=5
+# 单进程打开文件数上限（抓取任务可能并发打开较多文件）
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
