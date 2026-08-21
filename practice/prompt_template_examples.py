@@ -9,9 +9,17 @@
 文档中介绍的每个模板框架（RTF / CRISPE / CO-STAR / 角色 / Few-Shot / 思维链）
 以及 4 个实战模板（内容总结 / SQL 生成 / RAG 问答 / 代码审查），
 在下方均有对应的函数实现与调用演示。
+
+其中 call_llm() 会真正发起 HTTP 网络请求，调用 OpenAI 兼容的 chat completions
+接口；接口地址与密钥通过环境变量 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+传入，未配置时自动降级为本地模拟输出，保证脚本无网络、无密钥也能运行。
 """
 
+import json
+import os
 import re
+import urllib.error
+import urllib.request
 
 # =====================================================================
 # 一、通用模板渲染器（对应文档第 5 章：模板变量与占位符）
@@ -211,35 +219,85 @@ def code_review_prompt(language: str, code: str) -> str:
 
 
 # =====================================================================
-# 四、（可选）接入真实大模型 API 的调用骨架
+# 四、接入真实大模型 API（真正发起 HTTP 网络请求）
 # =====================================================================
 
-def call_llm(prompt: str) -> str:
+def call_llm(prompt: str, system: str = "你是一位资深编辑。",
+             temperature: float = 0.2) -> str:
     """
-    真实项目中的调用骨架（本示例中不真正发起网络请求）。
+    真正发起 HTTP 网络请求，调用 OpenAI 兼容的 chat completions 接口。
 
-    生产环境通常使用 openai 兼容接口，示例代码如下：
+    使用 Python 标准库 urllib，无需安装 openai / requests 等第三方包。
 
-        from openai import OpenAI
+    配置（通过环境变量传入，避免在代码中硬编码密钥）：
+      LLM_BASE_URL  接口根地址，如 https://api.deepseek.com/v1
+      LLM_API_KEY   API 密钥，如 sk-xxxx
+      LLM_MODEL     模型名，如 deepseek-chat（未设置时默认 gpt-3.5-turbo）
 
-        client = OpenAI(
-            base_url="https://your-api-gateway/v1",  # 企业内部网关或官方地址
-            api_key="sk-xxx",                        # 建议从环境变量读取
-        )
-        response = client.chat.completions.create(
-            model="your-model-name",
-            messages=[
-                # system 放固定指令，user 放渲染后的动态内容
-                {"role": "system", "content": "你是一位资深编辑。"},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,  # 抽取/总结类任务建议 0~0.3，见第 7 章第 8 条
-        )
-        return response.choices[0].message.content
+    未配置 LLM_BASE_URL / LLM_API_KEY 时，自动降级为本地模拟输出，
+    保证脚本无网络、无密钥也能运行。
 
-    本地演示时直接返回占位结果，保证脚本无需网络与密钥即可运行。
+    :param prompt:      渲染后的用户提示词（user 消息内容）
+    :param system:      固定的角色指令（system 消息内容）
+    :param temperature: 采样温度，抽取/总结类任务建议 0~0.3（见文档第 7 章第 8 条）
+    :return:            模型回复文本；失败时返回带前缀的错误信息
     """
-    return f"[模拟 LLM 响应] 已收到 {len(prompt)} 字符的提示词，此处省略模型输出。"
+    base_url = os.environ.get("LLM_BASE_URL", "").strip()
+    api_key = os.environ.get("LLM_API_KEY", "").strip()
+    model = os.environ.get("LLM_MODEL", "gpt-3.5-turbo").strip()
+
+    # 未配置密钥/地址：降级为本地模拟，并提示如何配置
+    if not base_url or not api_key:
+        return (
+            "[本地模拟模式] 未配置环境变量 LLM_BASE_URL / LLM_API_KEY，已跳过网络请求。\n"
+            "配置示例（bash / Git Bash）：\n"
+            "  export LLM_BASE_URL=https://api.deepseek.com/v1\n"
+            "  export LLM_API_KEY=sk-xxxx\n"
+            "  export LLM_MODEL=deepseek-chat\n"
+            "配置示例（PowerShell）：\n"
+            "  $env:LLM_BASE_URL='https://api.deepseek.com/v1'\n"
+            "  $env:LLM_API_KEY='sk-xxxx'\n"
+            "  $env:LLM_MODEL='deepseek-chat'"
+        )
+
+    # 拼接 chat completions 接口地址（兼容地址末尾是否带斜杠）
+    url = base_url.rstrip("/") + "/chat/completions"
+
+    # 组装请求体：system 放固定角色指令，user 放渲染后的动态内容
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": temperature,
+    }
+    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+
+    # 设置请求头：JSON 内容类型 + Bearer Token 鉴权
+    headers = {
+        "Content-Type": "application/json; charset=utf-8",
+        "Authorization": f"Bearer {api_key}",
+    }
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+
+    # 真正发起网络请求，并分类处理各类异常（网络超时、HTTP 错误、解析失败）
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            body = resp.read().decode("utf-8")
+        result = json.loads(body)
+        # 提取模型回复文本
+        return result["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as e:
+        # 服务端返回非 2xx，读取错误详情便于排查
+        err_body = e.read().decode("utf-8", errors="replace")
+        return f"[HTTP {e.code}] {err_body}"
+    except urllib.error.URLError as e:
+        # 网络层错误（DNS 解析、连接超时、SSL 握手等）
+        return f"[网络错误] {e.reason}"
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        # 响应结构不符合预期
+        return f"[解析失败] {type(e).__name__}: {e}"
 
 
 # =====================================================================
@@ -340,9 +398,12 @@ def main() -> None:
              "    return db.query(f\"SELECT * FROM users WHERE id = {uid}\").first()",
     ))
 
-    # ---------- 模拟调用大模型 ----------
-    _banner("模拟调用 LLM（call_llm 骨架）")
-    prompt = summarize_prompt(document="测试文档内容……")
+    # ---------- 真实调用大模型（HTTP 网络请求）----------
+    _banner("调用 LLM（call_llm，真实网络请求）")
+    prompt = summarize_prompt(
+        document="2026 年第二季度，公司华东区销售额达 3200 万元，同比增长 18%，"
+                 "主要增长来自新客户渠道；但华南区销售额下滑 6%，原因待查。"
+    )
     print(call_llm(prompt))
 
     # ---------- 异常演示：变量缺失 ----------
