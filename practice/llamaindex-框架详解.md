@@ -192,6 +192,26 @@ documents = SimpleDirectoryReader("data/").load_data()
 # data/ 目录下的 PDF、DOCX、TXT、HTML 等会被自动解析为 Document 列表
 ```
 
+**功能测试**（可独立运行的验证脚本，中文注释标注每一步）：
+
+```python
+from llama_index.core import Document
+
+# ① 直接用字符串构造 Document（无需真实文件，适合单测）
+doc = Document(
+    text="LlamaIndex 是一个数据框架。",
+    metadata={"file_name": "test.txt", "source": "unit-test"},
+)
+
+# ② 断言：文本与元数据正确写入
+assert doc.text == "LlamaIndex 是一个数据框架。"
+assert doc.metadata["file_name"] == "test.txt"
+assert doc.metadata["source"] == "unit-test"
+print("✅ Document 构造测试通过：", doc.metadata)
+```
+
+> 真实文件读取验证：`SimpleDirectoryReader("data/").load_data()` 需 data/ 目录存在，可用临时目录构造 txt 后断言 `len(documents) >= 1`（见 7.2 节测试）。
+
 [⬆ 返回顶部](#top)
 
 ### 2.2 Node（节点）
@@ -216,6 +236,27 @@ nodes = parser.get_nodes_from_documents(documents)
 ```
 
 分块质量直接影响检索效果，10.1 节会给出策略建议。
+
+**功能测试**：
+
+```python
+from llama_index.core import Document
+from llama_index.core.node_parser import SentenceSplitter
+
+# ① 构造一篇较长的测试文本
+doc = Document(text="第一句话。第二句话。第三句话。第四句话。第五句话。")
+
+# ② 按句子切分：chunk_size 设为较小值以产生多个 Node
+parser = SentenceSplitter(chunk_size=10, chunk_overlap=0)
+nodes = parser.get_nodes_from_documents([doc])
+
+# ③ 断言：Node 数量非空，且每个 Node 保留来源 Document 关联
+assert len(nodes) >= 1
+assert nodes[0].ref_doc_id == doc.doc_id
+print(f"✅ 切分测试通过：共生成 {len(nodes)} 个 Node")
+```
+
+> 默认参数为 chunk_size=1024、chunk_overlap=20；调参策略见 10.1 节。
 
 [⬆ 返回顶部](#top)
 
@@ -256,6 +297,34 @@ query_engine = index.as_query_engine(
 
 **关系（Relationships）**：Node 与 Document 之间通过关系图关联（如 `SOURCE` 关系），支持引用链追踪与图结构索引。
 
+**功能测试**：
+
+```python
+from llama_index.core import Document
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.core.vector_stores import MetadataFilters, MetadataFilter
+
+# ① 构造带元数据的文档并切分
+doc = Document(
+    text="财务部 Q2 营收报告……",
+    metadata={"department": "finance", "year": 2026},
+)
+parser = SentenceSplitter(chunk_size=512, chunk_overlap=50)
+nodes = parser.get_nodes_from_documents([doc])
+
+# ② 断言：节点级元数据继承自文档
+assert nodes[0].metadata["department"] == "finance"
+assert nodes[0].metadata["year"] == 2026
+
+# ③ 断言：检索过滤条件构造正确（key/value 匹配）
+filters = MetadataFilters(filters=[MetadataFilter(key="department", value="finance")])
+assert filters.filters[0].key == "department"
+assert filters.filters[0].value == "finance"
+print("✅ 元数据与过滤条件测试通过")
+```
+
+> 过滤条件需配合检索器使用：`index.as_retriever(filters=filters)`。
+
 [⬆ 返回顶部](#top)
 
 ### 2.4 Settings（全局配置）
@@ -276,6 +345,26 @@ Settings.chunk_overlap = 50
 ```
 
 配置后，`VectorStoreIndex.from_documents()` 会自动使用 Settings 中的模型与参数。这是搭建项目时**第一个要配置的东西**。
+
+**功能测试**：
+
+```python
+from llama_index.core import Settings
+from llama_index.core.node_parser import SentenceSplitter
+
+# ① 修改全局配置（项目级默认参数）
+Settings.chunk_size = 256
+Settings.chunk_overlap = 30
+
+# ② 断言：配置立即生效，且被组件默认读取
+assert Settings.chunk_size == 256
+assert Settings.chunk_overlap == 30
+parser = SentenceSplitter.from_defaults()  # 不传参时读取 Settings 默认值
+assert parser.chunk_size == 256
+print(f"✅ Settings 测试通过：chunk_size={Settings.chunk_size}, chunk_overlap={Settings.chunk_overlap}")
+```
+
+> 注意：检索/生成类操作还需配置 `Settings.llm` 与 `Settings.embed_model`（见 7.2），否则会提示缺省。
 
 [⬆ 返回顶部](#top)
 
@@ -313,6 +402,34 @@ documents = NotionPageReader(integration_token="xxx").load_data(page_ids=["..."]
 
 通用本地文件用 `SimpleDirectoryReader`（随 meta 包自带），支持 PDF/DOCX/TXT/HTML/CSV/图片等。
 
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+# 安装所需插件（按需执行）
+pip install llama-index-readers-file      # SimpleDirectoryReader 文件读取扩展
+pip install llama-index-readers-notion    # Notion 连接器（示例）
+```
+
+```python
+# 测试用例：SimpleDirectoryReader 读取临时目录
+import os
+import tempfile
+from llama_index.core import SimpleDirectoryReader
+
+# ① 创建临时目录并写入一个 txt 文件
+tmpdir = tempfile.mkdtemp()
+with open(os.path.join(tmpdir, "demo.txt"), "w", encoding="utf-8") as f:
+    f.write("这是一份测试文档。")
+
+# ② 读取目录并断言解析结果
+documents = SimpleDirectoryReader(tmpdir).load_data()
+assert len(documents) == 1
+assert "测试文档" in documents[0].text
+print("✅ 目录读取测试通过：", documents[0].metadata["file_name"])
+```
+
+> Notion 等外部连接器需真实 token 才能端到端验证；本地优先用 SimpleDirectoryReader 覆盖读取链路。
+
 [⬆ 返回顶部](#top)
 
 ### 3.2 文档解析（LlamaParse）
@@ -341,6 +458,24 @@ documents = parser.load_data("./scanned_report.pdf")
 
 免费额度内可直接使用（LlamaCloud 注册获得 API Key）。LlamaParse 也是 LlamaCloud 的核心组件之一（详见第 9 章）。
 
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-parse   # LlamaParse 解析服务 SDK
+```
+
+```python
+# 测试用例：LlamaParse 初始化与参数校验（真实解析需 LLAMA_CLOUD_API_KEY）
+from llama_parse import LlamaParse
+
+# ① 初始化解析器：result_type 支持 markdown / text
+parser = LlamaParse(result_type="markdown")
+assert parser.result_type == "markdown"
+print("✅ LlamaParse 初始化通过（真实解析需 API Key，命令：parser.load_data('scanned.pdf')）")
+```
+
+> 端到端验证：`export LLAMA_CLOUD_API_KEY=...` 后调用 `parser.load_data("./scanned_report.pdf")` 并断言返回非空列表。
+
 [⬆ 返回顶部](#top)
 
 ### 3.3 嵌入模型（Embedding）
@@ -363,6 +498,39 @@ Settings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
 ```
 
 本地嵌入模型适合数据隐私敏感或离线场景，与 7.3 节 Ollama 方案搭配。
+
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-index-embeddings-ollama   # Ollama 本地嵌入
+```
+
+```python
+# 测试用例：嵌入模型连通性与语义相似度（需本地 Ollama 服务及 nomic-embed-text 模型）
+import math
+from llama_index.embeddings.ollama import OllamaEmbedding
+
+embed_model = OllamaEmbedding(model_name="nomic-embed-text")
+
+# ① 生成三个句子的向量
+vec_a = embed_model.get_text_embedding("公司的营收是多少？")
+vec_b = embed_model.get_text_embedding("企业 2026 年收入如何？")  # 与 A 语义相近
+vec_c = embed_model.get_text_embedding("今天天气很好")            # 与 A 语义无关
+
+# ② 断言：向量维度一致且非空
+assert len(vec_a) > 0 and len(vec_a) == len(vec_b) == len(vec_c)
+
+# ③ 简易余弦相似度：相近句子的相似度应高于无关句子
+def cos(x, y):
+    return sum(i * j for i, j in zip(x, y)) / (
+        math.sqrt(sum(i * i for i in x)) * math.sqrt(sum(j * j for j in y)) + 1e-9
+    )
+
+assert cos(vec_a, vec_b) > cos(vec_a, vec_c)
+print(f"✅ 嵌入测试通过：维度={len(vec_a)}, A-B={cos(vec_a, vec_b):.3f}, A-C={cos(vec_a, vec_c):.3f}")
+```
+
+> 若未启动 Ollama 会抛连接异常；离线/无 GPU 场景可换 HuggingFace 嵌入（`llama-index-embeddings-huggingface`）。
 
 [⬆ 返回顶部](#top)
 
@@ -396,6 +564,52 @@ index = VectorStoreIndex.from_documents(documents, vector_store=vector_store)
 
 对已用 PostgreSQL 的团队，`pgvector` 是最省事的生产选择（无需引入新中间件）。
 
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-index-vector-stores-qdrant qdrant-client
+```
+
+```python
+# 测试用例：Qdrant 本地模式建索引并检索（无需单独启动服务）
+from llama_index.core import Document, VectorStoreIndex
+from llama_index.core.embeddings import BaseEmbedding
+from llama_index.vector_stores.qdrant import QdrantVectorStore
+import qdrant_client
+
+# ① 自定义确定性嵌入：按"苹果/其他"返回固定向量，用于离线验证链路
+class FixedEmbedding(BaseEmbedding):
+    """固定向量嵌入（仅供测试，不产生真实语义）"""
+
+    def _get_query_embedding(self, query: str) -> list[float]:
+        return [1.0, 0.0] if "苹果" in query else [0.0, 1.0]
+
+    def _get_text_embedding(self, text: str) -> list[float]:
+        return [1.0, 0.0] if "苹果" in text else [0.0, 1.0]
+
+    async def _aget_query_embedding(self, query: str) -> list[float]:
+        return self._get_query_embedding(query)
+
+    async def _aget_text_embedding(self, text: str) -> list[float]:
+        return self._get_text_embedding(text)
+
+# ② 用本地路径模式创建 Qdrant 客户端（数据落在 ./qdrant_test_data）
+client = qdrant_client.QdrantClient(path="./qdrant_test_data")
+vector_store = QdrantVectorStore(client=client, collection_name="test_docs")
+
+# ③ 构建索引并检索
+index = VectorStoreIndex.from_documents(
+    [Document(text="苹果是一种水果。"), Document(text="香蕉也是一种水果。")],
+    vector_store=vector_store,
+    embed_model=FixedEmbedding(),
+)
+nodes = index.as_retriever(similarity_top_k=1).retrieve("苹果")
+assert len(nodes) == 1 and "苹果" in nodes[0].text
+print(f"✅ Qdrant 检索测试通过：命中「{nodes[0].text}」")
+```
+
+> 下文多处测试复用 `FixedEmbedding` 以离线验证链路，可复制本节定义；生产环境请替换为真实嵌入模型（3.3 节）。
+
 [⬆ 返回顶部](#top)
 
 ### 3.5 检索器（Retrievers）
@@ -420,6 +634,25 @@ from llama_index.core.retrievers import VectorIndexRetriever
 retriever = VectorIndexRetriever(index=index, similarity_top_k=5)
 nodes = retriever.retrieve("公司的营收是多少？")
 ```
+
+**功能测试**：
+
+```python
+# 测试用例：VectorIndexRetriever 检索（FixedEmbedding 定义见 3.4 节）
+from llama_index.core import Document, VectorStoreIndex
+from llama_index.core.retrievers import VectorIndexRetriever
+
+index = VectorStoreIndex.from_documents(
+    [Document(text="苹果是一种水果。"), Document(text="Python 是一门编程语言。")],
+    embed_model=FixedEmbedding(),
+)
+retriever = VectorIndexRetriever(index=index, similarity_top_k=1)
+nodes = retriever.retrieve("苹果")
+assert len(nodes) == 1 and "苹果" in nodes[0].text
+print(f"✅ 检索器测试通过：召回「{nodes[0].text}」")
+```
+
+> 检索器是查询引擎的底层组件，可单独测试召回质量；相似度阈值过滤见 3.6。
 
 [⬆ 返回顶部](#top)
 
@@ -447,6 +680,28 @@ query_engine = index.as_query_engine(
 
 后处理器是**低成本、高收益**的质量优化手段。
 
+**功能测试**：
+
+```python
+# 测试用例：SimilarityPostprocessor 相似度过滤
+from llama_index.core.schema import NodeWithScore, TextNode
+from llama_index.core.postprocessor import SimilarityPostprocessor
+
+# ① 构造一组带分数的假检索结果
+fake_nodes = [
+    NodeWithScore(node=TextNode(text="相关文档"), score=0.9),
+    NodeWithScore(node=TextNode(text="不相关文档"), score=0.5),
+]
+
+# ② 应用过滤：低于阈值的节点被剔除
+processor = SimilarityPostprocessor(similarity_cutoff=0.7)
+filtered = processor.postprocess_nodes(fake_nodes)
+assert len(filtered) == 1 and filtered[0].node.text == "相关文档"
+print("✅ 后处理器测试通过：过滤后保留", len(filtered), "个节点")
+```
+
+> 后处理器在检索后、生成前执行，可与 LLMRerank 组合使用（见 5.4）。
+
 [⬆ 返回顶部](#top)
 
 ### 3.7 引擎（Engines）
@@ -473,6 +728,32 @@ response = chat_engine.chat("针对刚才的内容，再详细说说……")
 
 引擎可组合 `retriever` + `node_postprocessors` + `response_synthesizer`，实现自定义查询管线。
 
+**功能测试**：
+
+```python
+# 测试用例：QueryEngine 与 ChatEngine 构建（需配置 Settings.llm）
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()  # 无真实 Key 时用假 LLM 走通链路
+index = VectorStoreIndex.from_documents(
+    [Document(text="测试文档内容。")], embed_model=FixedEmbedding()
+)
+
+# ① QueryEngine：单轮问答，返回带来源的响应对象
+query_engine = index.as_query_engine()
+response = query_engine.query("测试问题")
+assert response is not None and len(response.source_nodes) >= 1
+
+# ② ChatEngine：多轮对话（condense_question 模式自动压缩历史）
+chat_engine = index.as_chat_engine(chat_mode="condense_question")
+reply = chat_engine.chat("继续说说")
+assert reply is not None
+print(f"✅ 引擎测试通过：QueryEngine={str(response)[:20]}... ChatEngine 就绪")
+```
+
+> MockLLM 仅验证链路；生产请配置真实模型（`llama-index-llms-openai`）。
+
 [⬆ 返回顶部](#top)
 
 ---
@@ -497,6 +778,28 @@ query_engine = index.as_query_engine(similarity_top_k=3)
 **优点**：语义理解强、检索快、支持大规模；
 **局限**：对精确术语匹配敏感（需配合 BM25）、依赖嵌入模型质量。
 
+**功能测试**：
+
+```python
+# 测试用例：VectorStoreIndex 构建 + Top-K 检索（FixedEmbedding 见 3.4）
+from llama_index.core import Document, VectorStoreIndex
+
+index = VectorStoreIndex.from_documents(
+    [
+        Document(text="苹果是一种水果。"),
+        Document(text="Java 是一门编程语言。"),
+        Document(text="香蕉是热带水果。"),
+    ],
+    embed_model=FixedEmbedding(),
+)
+# 验证 Top-K 语义：固定嵌入下"苹果"应命中含"苹果"的节点
+nodes = index.as_retriever(similarity_top_k=3).retrieve("苹果")
+assert any("苹果" in n.text for n in nodes)
+print(f"✅ VectorStoreIndex 测试通过：Top-3 命中 {len(nodes)} 个节点")
+```
+
+> 相似度检索依赖嵌入质量；精确术语场景建议叠加 BM25（5.1 节）。
+
 [⬆ 返回顶部](#top)
 
 ### 4.2 SummaryIndex（摘要索引）
@@ -514,6 +817,23 @@ query_engine = index.as_query_engine()
 
 **适用**：需要全局总结的小文档（如摘要一份说明书）、需要按顺序阅读的场景。
 **局限**：Node 多时 token 成本高，不适合大语料。
+
+**功能测试**：
+
+```python
+# 测试用例：SummaryIndex 顺序取回全部 Node（无需嵌入模型）
+from llama_index.core import Document, SummaryIndex
+
+index = SummaryIndex.from_documents([
+    Document(text="第一段内容：介绍背景。"),
+    Document(text="第二段内容：说明方案。"),
+])
+nodes = index.as_retriever().retrieve("任意问题")
+assert len(nodes) == 2  # 不加筛选，全部返回
+print(f"✅ SummaryIndex 测试通过：顺序返回 {len(nodes)} 个节点")
+```
+
+> 适合小文档全局总结；Node 多时 token 成本高。
 
 [⬆ 返回顶部](#top)
 
@@ -535,6 +855,25 @@ query_engine = index.as_query_engine()
 **适用**：需要快速概括大文档结构、对 token 成本敏感的场景。
 **局限**：构建耗时（多次 LLM 调用）、对单点细节查询可能丢失信息。
 
+**功能测试**：
+
+```python
+# 测试用例：TreeIndex 构建与检索（树构建需 LLM，用 MockLLM 验证链路）
+from llama_index.core import Document, TreeIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()
+index = TreeIndex.from_documents([
+    Document(text="第一部分：项目背景与目标。"),
+    Document(text="第二部分：实施方案与计划。"),
+])
+nodes = index.as_retriever().retrieve("项目")
+assert len(nodes) >= 1
+print(f"✅ TreeIndex 测试通过：检索到 {len(nodes)} 个节点")
+```
+
+> 真实使用中树构建会多次调用 LLM 生成摘要，耗时与 token 成本较高。
+
 [⬆ 返回顶部](#top)
 
 ### 4.4 KeywordTableIndex（关键词表索引）
@@ -552,6 +891,25 @@ query_engine = index.as_query_engine()
 
 **适用**：术语精确、领域封闭的场景（如法规条款、产品规格）。
 **局限**：语义泛化能力弱，遇到同义表达易漏检；大语料下关键词表膨胀。
+
+**功能测试**：
+
+```python
+# 测试用例：KeywordTableIndex 关键词检索（关键词提取需 LLM，用 MockLLM）
+from llama_index.core import Document, KeywordTableIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()
+index = KeywordTableIndex.from_documents([
+    Document(text="合同法第一百条：违约责任。"),
+    Document(text="劳动法关于试用期的规定。"),
+])
+nodes = index.as_retriever().retrieve("违约责任")
+assert len(nodes) >= 1
+print(f"✅ KeywordTableIndex 测试通过：检索到 {len(nodes)} 个节点")
+```
+
+> 适合封闭领域精确术语；同义表达可能漏检，需配合向量检索。
 
 [⬆ 返回顶部](#top)
 
@@ -583,6 +941,24 @@ query_engine = index.as_query_engine(
 | 精确术语、封闭领域 | KeywordTableIndex |
 | 实体关系推理 | PropertyGraphIndex |
 
+**功能测试**：
+
+```python
+# 测试用例：PropertyGraphIndex 图索引构建与检索（需 LLM 抽取实体关系）
+from llama_index.core import Document, PropertyGraphIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()
+index = PropertyGraphIndex.from_documents([
+    Document(text="张三任职于泰禾公司，职位是 Java 开发。"),
+])
+nodes = index.as_retriever(include_text=True).retrieve("张三")
+assert len(nodes) >= 1
+print(f"✅ PropertyGraphIndex 测试通过：检索到 {len(nodes)} 个节点")
+```
+
+> 属性图支持 Text-to-Cypher 等图查询；如需 Neo4j 等外部图库，安装对应 `llama-index-graph-stores-*` 插件。
+
 [⬆ 返回顶部](#top)
 
 ---
@@ -611,6 +987,39 @@ nodes = hybrid.retrieve("Q2 营收数据")
 
 融合策略（RRF / 加权和）会将两类结果合并去重，显著提升召回质量。生产环境建议 **默认开启混合检索**。
 
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-index-retrievers-bm25   # BM25 稀疏检索
+```
+
+```python
+# 测试用例：混合检索（向量 + BM25 融合，FixedEmbedding 见 3.4）
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.indices.vector_store.retrievers import VectorIndexRetriever
+from llama_index.retrievers.bm25 import BM25Retriever
+from llama_index.core.retrievers import HybridRetriever
+
+Settings.llm = MockLLM()
+docs = [
+    Document(text="公司 2026 年 Q2 营收 1.2 亿元。"),
+    Document(text="公司发布了新一代产品。"),
+]
+index = VectorStoreIndex.from_documents(docs, embed_model=FixedEmbedding())
+
+vector_retriever = VectorIndexRetriever(index=index, similarity_top_k=2)
+bm25_retriever = BM25Retriever.from_defaults(docstore=index.docstore, similarity_top_k=2)
+hybrid = HybridRetriever(vector_retriever, bm25_retriever)
+
+# 精确术语"营收"由 BM25 兜底召回
+nodes = hybrid.retrieve("营收 1.2 亿元")
+assert len(nodes) >= 1 and any("营收" in n.text for n in nodes)
+print(f"✅ 混合检索测试通过：召回 {len(nodes)} 个节点")
+```
+
+> 生产环境建议默认开启混合检索；融合算法默认为 RRF。
+
 [⬆ 返回顶部](#top)
 
 ### 5.2 查询变换（Query Transforms）
@@ -634,6 +1043,34 @@ query_engine = MultiStepQueryEngine(query_engine=query_engine, query_transform=s
 ```
 
 **经验**：当检索结果"看起来相关但回答不全"时，优先尝试查询变换。
+
+**功能测试**：
+
+```python
+# 测试用例：MultiStepQueryEngine 查询变换管线构建
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.query_engine import MultiStepQueryEngine
+from llama_index.core.query_transform import StepDecomposeQueryTransform
+
+Settings.llm = MockLLM()
+index = VectorStoreIndex.from_documents(
+    [Document(text="2026 年营收增长 20%。")], embed_model=FixedEmbedding()
+)
+
+# ① 构建多步查询引擎（内部会先拆解子问题再逐步检索）
+step_decompose = StepDecomposeQueryTransform(llm=Settings.llm, verbose=True)
+multi_qe = MultiStepQueryEngine(
+    query_engine=index.as_query_engine(), query_transform=step_decompose
+)
+
+# ② 断言：管线构建成功且可执行（MockLLM 下返回非空结果）
+response = multi_qe.query("营收变化情况")
+assert response is not None
+print(f"✅ 查询变换测试通过：{str(response)[:30]}")
+```
+
+> 真实效果依赖 LLM 拆解质量；"检索相关但答不全"时优先尝试。
 
 [⬆ 返回顶部](#top)
 
@@ -660,6 +1097,44 @@ response = query_engine.query("2026 年公司业绩如何？相比去年有哪�
 ```
 
 **适用**：多数据源、跨文档、需要分而治之的复杂查询。这是 Agent 路由的轻量替代。
+
+**功能测试**：
+
+```python
+# 测试用例：SubQuestionQueryEngine 多数据源路由
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.query_engine import SubQuestionQueryEngine
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+
+Settings.llm = MockLLM()
+
+# ① 构建两个独立知识库索引
+index_finance = VectorStoreIndex.from_documents(
+    [Document(text="2026 年营收 1.2 亿元。")], embed_model=FixedEmbedding()
+)
+index_news = VectorStoreIndex.from_documents(
+    [Document(text="公司发布新一代产品。")], embed_model=FixedEmbedding()
+)
+
+# ② 包装为带描述的查询工具（Agent 依据描述路由）
+tools = [
+    QueryEngineTool(
+        query_engine=index_finance.as_query_engine(),
+        metadata=ToolMetadata(name="财报库", description="公司财报相关"),
+    ),
+    QueryEngineTool(
+        query_engine=index_news.as_query_engine(),
+        metadata=ToolMetadata(name="新闻库", description="公司新闻相关"),
+    ),
+]
+query_engine = SubQuestionQueryEngine.from_defaults(query_engine_tools=tools)
+response = query_engine.query("业绩如何？发布了什么产品？")
+assert response is not None
+print(f"✅ 子问题查询测试通过：{str(response)[:40]}")
+```
+
+> 每个子问题按描述路由到对应数据源，最后汇总；适合多库对比场景。
 
 [⬆ 返回顶部](#top)
 
@@ -691,6 +1166,37 @@ query_engine = index.as_query_engine(
 | 不重排 | 基准 | 最快 | 最低 |
 | 交叉编码器重排 | 高 | 快 | 低（本地模型） |
 | LLM 重排 | 最高 | 慢 | 高 |
+
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+# 交叉编码器重排需额外安装（首次运行会下载模型权重）
+pip install sentence-transformers llama-index-postprocessor-sentence-transformers-rerank
+```
+
+```python
+# 测试用例：LLMRerank 重排（用 MockLLM 验证管线；真实打分需真实模型）
+from llama_index.core import Settings
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.postprocessor import LLMRerank
+from llama_index.core.schema import NodeWithScore, TextNode
+
+Settings.llm = MockLLM()
+
+# ① 构造 5 条粗召回结果（分数由高到低）
+fake_nodes = [
+    NodeWithScore(node=TextNode(text=f"候选文档{i}"), score=0.9 - i * 0.1)
+    for i in range(5)
+]
+
+# ② 重排：压缩到 top_n 条
+reranker = LLMRerank(top_n=2)
+out = reranker.postprocess_nodes(fake_nodes, query_str="测试问题")
+assert len(out) <= 2
+print(f"✅ 重排测试通过：5 条压缩为 {len(out)} 条")
+```
+
+> 交叉编码器方案（`SentenceTransformerRerank(model="BAAI/bge-reranker-base")`）更快、成本低，生产推荐。
 
 [⬆ 返回顶部](#top)
 
@@ -734,6 +1240,31 @@ Agent 类型：
 - `ReActAgent`（推理-行动循环，兼容更多模型）；
 - `CustomAgent`（自定义循环）。
 
+**功能测试**：
+
+```python
+# 测试用例：ReActAgent 工具调用（MockLLM 验证链路，真实推理需函数调用模型）
+from llama_index.core.agent import ReActAgent
+from llama_index.core.tools import FunctionTool
+from llama_index.core.llms.mock import MockLLM
+
+def add(a: int, b: int) -> int:
+    """两数相加"""
+    return a + b
+
+# ① 构造 Agent：携带一个函数工具
+agent = ReActAgent.from_tools(
+    [FunctionTool.from_defaults(fn=add)], llm=MockLLM(), verbose=True
+)
+
+# ② 断言：对话链路可执行并返回响应
+resp = agent.chat("1 加 2 等于多少？")
+assert resp is not None
+print(f"✅ Agent 测试通过：{resp}")
+```
+
+> FunctionCallingAgent 需 OpenAI 等函数调用模型；ReActAgent 兼容更广。
+
 [⬆ 返回顶部](#top)
 
 ### 6.2 多智能体协作（LlamaAgents）
@@ -762,6 +1293,38 @@ response = orchestrator.run("调研竞品 2026 年策略并输出对比报告")
 ```
 
 多智能体的价值：每个 Agent 聚焦单一职责，工具集更小、提示更精准、更容易调试。
+
+**功能测试**：
+
+```python
+# 测试用例：多智能体分工构建验证（协作效果依赖真实 LLM）
+from llama_index.core.agent import FunctionCallingAgentWorker
+from llama_index.core.tools import FunctionTool
+from llama_index.core.llms.mock import MockLLM
+
+def search(query: str) -> str:
+    """模拟检索资料"""
+    return f"关于「{query}」的资料"
+
+def summarize(text: str) -> str:
+    """模拟总结"""
+    return f"总结：{text[:20]}"
+
+# ① 两个专业 Agent：检索型 + 总结型，各自只持单一工具
+research_agent = FunctionCallingAgentWorker.from_tools(
+    [FunctionTool.from_defaults(fn=search)], llm=MockLLM()
+).as_agent()
+summary_agent = FunctionCallingAgentWorker.from_tools(
+    [FunctionTool.from_defaults(fn=summarize)], llm=MockLLM()
+).as_agent()
+
+# ② 断言：两个 Agent 均可独立响应（分工协作基础）
+assert research_agent.chat("竞品策略") is not None
+assert summary_agent.chat("总结一下") is not None
+print("✅ 多智能体构建测试通过：检索 Agent 与总结 Agent 均已就绪")
+```
+
+> 生产环境用 AgentWorkflow/编排器组合多个 Agent 实现编排者-工作者模式。
 
 [⬆ 返回顶部](#top)
 
@@ -804,6 +1367,40 @@ result = await workflow.run(query="公司 2026 年战略是什么？")
 - 可视化调试（`draw_all_flows()` 生成流程图）；
 - 可被 llama-deploy 打包为独立服务（见 9.3）。
 
+**功能测试**：
+
+```python
+# 测试用例：事件驱动 Workflow（纯逻辑，无需 LLM/嵌入）
+import asyncio
+from llama_index.core.workflow import Event, StartEvent, StopEvent, Workflow, step
+
+class AddEvent(Event):
+    """自定义事件：携带两个操作数"""
+    x: int
+    y: int
+
+class CalcWorkflow(Workflow):
+    @step
+    async def add(self, ev: StartEvent) -> AddEvent:
+        """步骤 1：接收启动事件，发出 AddEvent"""
+        return AddEvent(x=ev.x, y=ev.y)
+
+    @step
+    async def multiply(self, ev: AddEvent) -> StopEvent:
+        """步骤 2：消费 AddEvent，计算结果并结束"""
+        return StopEvent(result=(ev.x + ev.y) * 2)
+
+async def main():
+    wf = CalcWorkflow()
+    result = await wf.run(x=1, y=2)   # (1+2)*2 = 6
+    assert result == 6
+    print(f"✅ Workflow 测试通过：result={result}")
+
+asyncio.run(main())
+```
+
+> 步骤通过事件解耦，支持并行/循环/条件分支；`draw_all_flows()` 可输出流程图。
+
 [⬆ 返回顶部](#top)
 
 ### 6.4 工具调用与函数集成
@@ -830,6 +1427,30 @@ email_tool = FunctionTool.from_defaults(fn=send_email)
 ```
 
 > 工具描述（docstring + 参数类型注解）会被 LLM 读取用于决策，**必须写清楚"何时用、怎么用"**，这直接影响 Agent 的工具选择正确率。
+
+**功能测试**：
+
+```python
+# 测试用例：FunctionTool 包装与元数据提取
+from llama_index.core.tools import FunctionTool
+
+def send_email(to: str, subject: str, body: str) -> str:
+    """发送邮件（示例实现，仅返回调用记录）"""
+    return f"已发送给 {to}，主题：{subject}"
+
+tool = FunctionTool.from_defaults(fn=send_email)
+
+# ① 断言：名称与描述（docstring）被自动提取，供 LLM 决策
+assert tool.metadata.name == "send_email"
+assert "发送邮件" in tool.metadata.description
+
+# ② 断言：底层函数可直接调用
+result = tool.fn("zhang@example.com", "测试", "内容")
+assert "zhang@example.com" in result
+print(f"✅ FunctionTool 测试通过：{result}")
+```
+
+> 工具描述决定 Agent 选工具的准确率，docstring 务必写清"何时用、怎么用"。
 
 [⬆ 返回顶部](#top)
 
@@ -877,6 +1498,25 @@ npm i llamaindex
 # 或脚手架
 npx create-llama@latest
 ```
+
+**安装验证**（仅列出命令，不自动执行）：
+
+```bash
+# 验证安装是否成功
+python -c "import llama_index; print('llama-index', llama_index.__version__)"
+python -c "from llama_index.core import VectorStoreIndex; print('core 导入 OK')"
+```
+
+```python
+# 测试用例：安装完整性检查
+import llama_index
+
+# 断言：主包可导入且带版本号
+assert hasattr(llama_index, "__version__")
+print(f"✅ 安装验证通过：llama-index {llama_index.__version__}")
+```
+
+> 若 `import llama_index` 失败，说明未安装或 venv 选错；用 `python -m pip install llama-index` 修复。
 
 [⬆ 返回顶部](#top)
 
@@ -931,6 +1571,38 @@ my-rag-app/
 └── .env             # OPENAI_API_KEY=sk-xxx
 ```
 
+**功能测试**（端到端全链路，无外部依赖版本）：
+
+```python
+# 测试用例：五步 RAG（临时文件 + MockLLM + FixedEmbedding，离线可跑）
+import os
+import tempfile
+from llama_index.core import Settings, VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core.llms.mock import MockLLM
+
+# ① 准备测试文档（临时目录）
+tmpdir = tempfile.mkdtemp()
+with open(os.path.join(tmpdir, "test.txt"), "w", encoding="utf-8") as f:
+    f.write("作者是一名 Java 后端工程师。")
+
+# ② 全局配置：假 LLM + 固定嵌入（FixedEmbedding 定义见 3.4 节）
+Settings.llm = MockLLM()
+Settings.embed_model = FixedEmbedding()
+
+# ③ 五步链路：读取 → 索引 → 引擎 → 提问 → 输出
+documents = SimpleDirectoryReader(tmpdir).load_data()   # 1. 读取文档
+index = VectorStoreIndex.from_documents(documents)       # 2. 切分+嵌入+建索引
+query_engine = index.as_query_engine()                   # 3. 创建查询引擎
+response = query_engine.query("作者职业是什么？")          # 4. 提问
+
+# ④ 断言：有回答且有引用来源
+assert response is not None
+assert len(response.source_nodes) >= 1
+print(f"✅ 五步 RAG 测试通过：{response}（来源 {len(response.source_nodes)} 条）")
+```
+
+> 换成真实环境：把 MockLLM 换成 `OpenAI(model="gpt-4o")`、FixedEmbedding 换成 `OpenAIEmbedding`，并设置 `OPENAI_API_KEY`。
+
 [⬆ 返回顶部](#top)
 
 ### 7.3 本地模型接入（Ollama）
@@ -964,6 +1636,35 @@ print(query_engine.query("关键结论是什么？"))
 
 **适用**：内网部署、数据合规、无 API 预算的场景。注意本地模型的效果与速度取决于硬件（推荐 16GB+ 显存）。
 
+**功能测试**（前置命令仅列出，不自动执行）：
+
+```bash
+# 前置准备
+ollama pull llama3.2          # LLM 模型
+ollama pull nomic-embed-text  # 嵌入模型
+pip install llama-index-llms-ollama llama-index-embeddings-ollama
+```
+
+```python
+# 测试用例：Ollama 连通性探测（需本地已启动 Ollama 服务）
+from llama_index.llms.ollama import Ollama
+from llama_index.embeddings.ollama import OllamaEmbedding
+
+llm = Ollama(model="llama3.2", request_timeout=60.0)
+embed_model = OllamaEmbedding(model_name="nomic-embed-text")
+
+# ① LLM 连通性：能返回非空回复
+resp = llm.complete("用一句话介绍自己")
+assert resp is not None and len(str(resp)) > 0
+
+# ② 嵌入连通性：能返回非空向量
+vec = embed_model.get_text_embedding("测试")
+assert len(vec) > 0
+print(f"✅ Ollama 测试通过：回复={str(resp)[:20]}... 嵌入维度={len(vec)}")
+```
+
+> 报错 `Connection refused` 说明 Ollama 未启动；`model not found` 说明未执行 `ollama pull`。
+
 [⬆ 返回顶部](#top)
 
 ### 7.4 TypeScript 版本
@@ -984,6 +1685,31 @@ console.log(response.toString());
 ```
 
 **适用**：全栈项目（前后端同语言）、Serverless/Edge 部署场景。核心概念与 Python 版一致，可平滑迁移。
+
+**功能测试**（TypeScript，需 Node 18+）：
+
+```bash
+# 安装（不自动执行）
+npm i llamaindex
+```
+
+```typescript
+// 测试用例：TS 版 RAG 链路（./data 目录需存在至少一个 txt/pdf 文件）
+import { VectorStoreIndex, SimpleDirectoryReader } from "llamaindex";
+
+// ① 读取目录文档
+const documents = await new SimpleDirectoryReader("./data").loadData();
+// ② 构建索引
+const index = await VectorStoreIndex.fromDocuments(documents);
+// ③ 创建查询引擎并提问
+const queryEngine = index.asQueryEngine();
+const response = await queryEngine.query({ query: "文档的核心观点是什么？" });
+// ④ 断言：返回非空结果
+if (response.toString().length === 0) throw new Error("查询结果为空");
+console.log(`✅ TS 查询通过：${response.toString()}`);
+```
+
+> 运行：`npx tsx test.ts`；默认使用 OpenAI 模型，需设置 `OPENAI_API_KEY`。
 
 [⬆ 返回顶部](#top)
 
@@ -1015,6 +1741,34 @@ console.log(response.toString());
 - 引用来源（`response.source_nodes`）提升可信度；
 - 混合检索 + 重排保证精度。
 
+**功能测试**：
+
+```python
+# 测试用例：知识库问答（元数据过滤 + 引用来源，FixedEmbedding 见 3.4）
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+from llama_index.core.vector_stores import MetadataFilters, MetadataFilter
+
+Settings.llm = MockLLM()
+# ① 构造带部门元数据的制度文档
+doc = Document(
+    text="报销流程：先提交申请单，再审批。",
+    metadata={"department": "finance", "doc_type": "制度"},
+)
+index = VectorStoreIndex.from_documents([doc], embed_model=FixedEmbedding())
+
+# ② 按元数据过滤检索：只查 finance 部门
+retriever = index.as_retriever(
+    similarity_top_k=5,
+    filters=MetadataFilters(filters=[MetadataFilter(key="department", value="finance")]),
+)
+nodes = retriever.retrieve("报销流程")
+assert len(nodes) >= 1 and nodes[0].metadata["department"] == "finance"
+print(f"✅ 知识库问答测试通过：来源={nodes[0].metadata.get('doc_type')}")
+```
+
+> 生产架构：Reader → 分块嵌入 → pgvector/Qdrant → QueryEngine，回答携带 `response.source_nodes` 引用。
+
 [⬆ 返回顶部](#top)
 
 ### 8.2 文档分析与报告
@@ -1041,6 +1795,31 @@ class ContractSummary(BaseModel):
 # 查询时指定结构化输出模型
 ```
 
+**功能测试**：
+
+```python
+# 测试用例：PydanticOutputParser 结构化解析（无需 LLM 即可验证）
+from llama_index.core.output_parsers import PydanticOutputParser
+from pydantic import BaseModel
+
+class ContractSummary(BaseModel):
+    """合同摘要结构：签约方 / 金额 / 风险点"""
+    parties: list[str]
+    amount: float
+    risks: list[str]
+
+# ① 构造解析器
+parser = PydanticOutputParser(output_cls=ContractSummary)
+
+# ② 模拟 LLM 返回的 JSON 文本，断言解析为 Pydantic 对象
+json_text = '{"parties": ["甲方", "乙方"], "amount": 100.5, "risks": ["付款延迟"]}'
+obj = parser.parse(json_text)
+assert obj.amount == 100.5 and len(obj.parties) == 2 and len(obj.risks) == 1
+print(f"✅ 结构化输出测试通过：{obj}")
+```
+
+> 与 LLM 组合：`response = query_engine.query(..., output_cls=ContractSummary)` 直接返回对象。
+
 [⬆ 返回顶部](#top)
 
 ### 8.3 多模态检索
@@ -1054,6 +1833,29 @@ class ContractSummary(BaseModel):
 - 配合 LlamaParse 的 OCR 能力处理图表型 PDF。
 
 **适用**：带图文档（产品图册、设计稿、教学材料）、图表型财报。
+
+**功能测试**：
+
+```python
+# 测试用例：多模态检索骨架（图片经视觉模型生成文本后入索引）
+# 依赖：llama-index-multi-modal-llms-openai / ollama 视觉模型（按需安装，不自动执行）
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()
+# ① 图片由视觉模型生成描述文本（此处用占位文本模拟）
+image_caption = "图表：2026 年 Q2 营收 1.2 亿元，同比 +20%。"
+index = VectorStoreIndex.from_documents(
+    [Document(text=image_caption, metadata={"type": "chart"})],
+    embed_model=FixedEmbedding(),
+)
+# ② 查询命中图表描述节点
+nodes = index.as_retriever(similarity_top_k=1).retrieve("营收折线图")
+assert len(nodes) >= 1 and nodes[0].metadata.get("type") == "chart"
+print(f"✅ 多模态检索骨架测试通过：命中图表节点（{len(nodes)} 条）")
+```
+
+> 真实实现：视觉模型（如 OpenAI gpt-4o / Ollama llava）生成图片描述 → 与文本统一入索引。
 
 [⬆ 返回顶部](#top)
 
@@ -1074,6 +1876,46 @@ class ContractSummary(BaseModel):
 | 合同管理 | 检索合同库 → 提取关键条款 → 生成到期提醒 |
 | 报表生成 | 检索数据文档 → 计算指标 → 输出结构化报告 |
 | 资料整理 | 多源检索 → 去重 → 生成专题知识包 |
+
+**功能测试**：
+
+```python
+# 测试用例：智能文档代理（文档检索 + 工具执行的组合）
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.agent import ReActAgent
+from llama_index.core.tools import FunctionTool, QueryEngineTool
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()
+
+# ① 合同库索引
+index = VectorStoreIndex.from_documents(
+    [Document(text="合同 A：与乙方签约，到期日 2026-12-31。")],
+    embed_model=FixedEmbedding(),
+)
+query_tool = QueryEngineTool.from_defaults(
+    query_engine=index.as_query_engine(),
+    name="contract_db",
+    description="合同库检索：查到期日、条款",
+)
+
+# ② 提醒工具：写日历/发邮件的模拟实现
+def create_reminder(title: str, due_date: str) -> str:
+    """创建到期提醒（模拟）"""
+    return f"已创建提醒：{title} @ {due_date}"
+
+remind_tool = FunctionTool.from_defaults(fn=create_reminder)
+
+# ③ 组合成代理：检索合同 → 生成提醒
+agent = ReActAgent.from_tools(
+    [query_tool, remind_tool], llm=MockLLM(), verbose=True
+)
+resp = agent.chat("查询合同 A 的到期日并创建提醒")
+assert resp is not None
+print(f"✅ 文档代理测试通过：{resp}")
+```
+
+> 生产环境以 Workflows 编排长流程，并通过 llama-deploy 部署为服务（见 9.3）。
 
 [⬆ 返回顶部](#top)
 
@@ -1109,6 +1951,23 @@ documents = LlamaParse(result_type="markdown").load_data("scanned.pdf")
 
 **价值**：把"解析质量"这个 RAG 的上游瓶颈外包给专业服务——解析错了，后面检索再好也白搭。
 
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-parse
+```
+
+```python
+# 测试用例：LlamaParse 初始化与参数校验（真实解析需 LLAMA_CLOUD_API_KEY）
+from llama_parse import LlamaParse
+
+parser = LlamaParse(result_type="markdown")
+assert parser.result_type == "markdown"
+print("✅ LlamaParse 初始化通过；真实解析：parser.load_data('scanned.pdf')")
+```
+
+> 免费额度每月 10,000 积分；解析结果（Markdown）可直接进入索引管线。
+
 [⬆ 返回顶部](#top)
 
 ### 9.2 LlamaCloud
@@ -1125,6 +1984,26 @@ LlamaCloud 是 LlamaIndex 的**托管 SaaS**（2025-03 与 A 轮融资同期 GA�
 - 与开源组件 API 兼容，迁移成本低。
 
 **适合**：不想自建检索基础设施的团队，或作为开源 LlamaIndex 的补充（托管解析与索引 + 自研查询层）。
+
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-cloud
+```
+
+```python
+# 测试用例：LlamaCloud 客户端初始化（需 LLAMA_CLOUD_API_KEY）
+# 真实调用：上传文档 → 托管解析/索引 → 返回可查询的索引对象
+try:
+    from llama_cloud import LlamaCloud  # 或新版 SDK 对应入口
+    client = LlamaCloud(api_key="YOUR_API_KEY")
+    assert client is not None
+    print("✅ LlamaCloud 客户端初始化通过（真实调用需有效 API Key）")
+except ImportError:
+    print("⚠️ 未安装 llama-cloud，执行 pip install llama-cloud 后重试")
+```
+
+> LlamaCloud 为托管 SaaS；生产可将其作为"托管解析+索引"层，查询层自建。
 
 [⬆ 返回顶部](#top)
 
@@ -1156,6 +2035,25 @@ Workflow / Agent 定义
 | 监控 | 检索质量指标、响应延迟、token 消耗（可接 Langfuse/MLflow） |
 | 异步化 | 长任务用 llama-deploy 或自建任务队列 |
 | 隐私合规 | 内网部署用 Ollama + 本地嵌入 |
+
+**功能测试**（涉及安装的插件仅列出命令，不自动执行）：
+
+```bash
+pip install llama-deploy
+```
+
+```python
+# 测试用例：llama-deploy 可用性检查（仅验证安装，不执行真实部署）
+import subprocess
+
+result = subprocess.run(
+    ["llama-deploy", "--help"], capture_output=True, text=True
+)
+assert result.returncode == 0, "llama-deploy 未安装或不在 PATH"
+print("✅ llama-deploy 已安装可用")
+```
+
+> 真实部署：把 Workflow 写入 `deployment.py`，执行 `llama-deploy deploy` 暴露 REST 服务。
 
 [⬆ 返回顶部](#top)
 
@@ -1193,6 +2091,29 @@ parser = SentenceWindowNodeParser.from_defaults(
 
 3. **验证**：对 20~50 条典型问题做检索质量回归，调参要有数据依据。
 
+**功能测试**：
+
+```python
+# 测试用例：SentenceWindowNodeParser 窗口化分块（Small-to-Big 基础）
+from llama_index.core import Document
+from llama_index.core.node_parser import SentenceWindowNodeParser
+
+parser = SentenceWindowNodeParser.from_defaults(
+    window_size=2,           # 每个节点前后各取 2 句作为上下文窗口
+    window_metadata_key="window",
+)
+nodes = parser.get_nodes_from_documents([
+    Document(text="第一句。第二句。第三句。第四句。"),
+])
+
+# 断言：每个节点都携带扩展后的窗口上下文元数据
+assert len(nodes) >= 1
+assert all("window" in n.metadata for n in nodes)
+print(f"✅ 窗口分块测试通过：共 {len(nodes)} 个节点，均含 window 元数据")
+```
+
+> 配套检索：`SentenceWindowNodeParser` 节点配合 `MetadataReplacementPostProcessor` 在回答时展开窗口。
+
 [⬆ 返回顶部](#top)
 
 ### 10.2 元数据设计
@@ -1217,6 +2138,30 @@ for node in response.source_nodes:
     print(node.metadata.get("file_name"), node.metadata.get("page_label"))
 ```
 
+**功能测试**：
+
+```python
+# 测试用例：引用来源输出（FixedEmbedding 见 3.4）
+from llama_index.core import Document, VectorStoreIndex, Settings
+from llama_index.core.llms.mock import MockLLM
+
+Settings.llm = MockLLM()
+doc = Document(
+    text="2026 年 Q2 营收 1.2 亿元。",
+    metadata={"file_name": "q2.pdf", "page_label": "3"},
+)
+index = VectorStoreIndex.from_documents([doc], embed_model=FixedEmbedding())
+response = index.as_query_engine().query("营收多少？")
+
+# 断言：回答携带可追溯来源（文件名 + 页码）
+assert len(response.source_nodes) >= 1
+src = response.source_nodes[0].metadata
+assert src.get("file_name") == "q2.pdf" and src.get("page_label") == "3"
+print(f"✅ 引用来源测试通过：{src.get('file_name')} 第 {src.get('page_label')} 页")
+```
+
+> 引用输出是知识库可信度的关键；元数据应避免放敏感信息。
+
 [⬆ 返回顶部](#top)
 
 ### 10.3 检索质量优化
@@ -1236,6 +2181,36 @@ for node in response.source_nodes:
 | 7 | 微调嵌入（领域数据） | 领域效果极致，成本高 |
 
 **评估指标**：Hit Rate（命中率）、MRR（平均倒数排名）、回答正确率——建议建立评估集持续回归。
+
+**功能测试**（评估指标计算，无需 LLM）：
+
+```python
+# 测试用例：Hit Rate 与 MRR 评估指标计算
+def hit_rate(ground_truths: list[str], retrieved: list[list[str]]) -> float:
+    """计算 Hit Rate：每个问题只要召回集合含正确答案即命中"""
+    hits = sum(1 for gt, rs in zip(ground_truths, retrieved) if gt in rs)
+    return hits / len(ground_truths)
+
+def mrr(ground_truths: list[str], retrieved: list[list[str]]) -> float:
+    """计算 MRR：正确答案排名的倒数均值"""
+    total = 0.0
+    for gt, rs in zip(ground_truths, retrieved):
+        for rank, r in enumerate(rs, start=1):
+            if r == gt:
+                total += 1 / rank
+                break
+    return total / len(ground_truths)
+
+# 模拟评估集：3 个问题，每个取 Top-3 检索结果
+ground_truths = ["A", "B", "C"]
+retrieved = [["A", "X", "Y"], ["Z", "B", "W"], ["Q", "W", "C"]]
+
+assert hit_rate(ground_truths, retrieved) == 1.0    # 全部命中
+assert abs(mrr(ground_truths, retrieved) - (1 + 0.5 + 1 / 3) / 3) < 1e-6
+print(f"✅ 评估指标测试通过：Hit Rate={hit_rate(ground_truths, retrieved):.2f}, MRR={mrr(ground_truths, retrieved):.3f}")
+```
+
+> 建立 50+ 条评估集持续回归，是检索质量优化的数据依据。
 
 [⬆ 返回顶部](#top)
 
